@@ -49,8 +49,8 @@ jmap
    可以查看占用空间的大对象
 
 10. ```
-   jmap -dump:format=b,file=C:\Users\SnailClimb\Desktop\heap.hprof 17340
+      jmap -dump:format=b,file=C:\Users\SnailClimb\Desktop\heap.hprof 17340
    ```
-
-   可以用jmap命令生成快照，然后下载到本地之后用图形化工具进行排查
-
+   ```
+可以用jmap命令生成快照，然后下载到本地之后用图形化工具进行排查
+   ```
