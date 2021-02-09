@@ -43,14 +43,26 @@ jmap
 8. 在jstack 80421 | less中，搜索那个占用大量CPU的线程id ：/13afd。搜索到”nid=0x13afd“（nid即native thread id）的线程的调用栈，查看代码，发现线程一直在执行这个while循环，while循环判断某个信号值，为true就一直执行，所以是因为这个信号值没有被更新成false，才导致了死循环，接下来就是排查我们代码的问题了。（线上排查代码可以使用阿里的arthas工具）
 
 9. ```java
-   jmap -histo ${pid}|head
+   查看前20大的对象
+   jmap -histo ${pid}|head 20
    ```
 
    可以查看占用空间的大对象
 
 10. ```
       jmap -dump:format=b,file=C:\Users\SnailClimb\Desktop\heap.hprof 17340
-   ```
-   ```
-可以用jmap命令生成快照，然后下载到本地之后用图形化工具进行排查
-   ```
+    ```
+
+11. jstack -info ${pid}  查看当前启动参数
+
+12. jstack -gc ${pid} 500   每隔500毫秒输出GC信息
+
+
+
+
+
+
+
+### arthas工具常用命令
+
+1. dashboard 图形界面，默认5s刷新一次

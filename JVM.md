@@ -293,11 +293,34 @@ null
 
 ​	
 
-### 常见的垃圾算法
+### 常见的垃圾收集算法
 
-- Mark-Sweep (标记清除)--空间不连续，会产生碎片
-- Coping(拷贝)--没有碎片，但是比较浪费空间
-- Mark-Compact(标记压缩) --没有碎片，效率偏低
+- 分代收集理论（Generational Collection）
+
+- Mark-Sweep (标记清除)
+
+  对需要回收的对象进行标记，然后再进行清除
+
+  缺点：
+
+  1. 执行效率不稳定，因为大量对象都是进行回收的，所以需要进行大量标记和清除动作，导致标记和清除动作效率随着对象增多而降低
+  2. 内存碎片化，空间不连续
+
+- Semispace Coping(拷贝)
+
+  将活着的对象复制到另外一个空间上面去，从而回收整个下半区。实现简单，运行效率也比较高
+
+  缺点：
+
+  1. 比较浪费空间，老年代不能采用这个算法
+
+- Mark-Compact(标记整理) 
+
+  对所有活着的对象进行标记，然后向内存的另外一端移动，之后对边界外的空间进行整理
+
+  缺点：
+
+  1. 移动存活的对象必须要STW(Stop The Word),停顿时间更长。
 
 ### JVM分代模型
 
@@ -307,34 +330,43 @@ null
    2. 永久代必须制定大小限制、元数据区可以设置也可以不设置（受限于物理内存）
    3. 字符串常量1.7-永久代、1.8元数据
    4. MeathArea逻辑概念，永久区、元数据区
-3. 新生代 =Eden+2个suvivor区
+3. 新生代 =Eden+2个suvivor区 Minor GC
    1. YGC之后，大多数对象会被回收，活着的对象进入suvivor0
    2. 再次YGC、活着的对象eden+s0->s1
    3. 再次YGC、活着对对象eden+s1->s0
    4. 年龄足够->老年代
 4. 老年代
    1. 顽固分子
-   2. 老年代满了  FullGC
+   2. 老年代满了  Major GC
 5. GC Tuning(Generation)
    1. 尽量减少FullGc
+
+**其中：跨代引用是有新生代的记忆集（Remembered Set）来进行标识，Minor GC的时候，这部分也会被加入的GCRoots里面**
 
 
 
 ### 常见的垃圾回收器
 
-1. serial年轻代串行回收
+1. serial年轻代串行回收，只有一个线程，性能比较低
 
-2. PS（Parallel Scavenge）并行回收---**多线程**
+2. PS（Parallel Scavenge）并行回收---**多线程**，与ParNew 区别是：主要关注吞吐量,即：**减少运行垃圾收集的时间**
 
 3. ParNew 年轻代配合CMS的并行回收
 
-4. SerialOld 
+4. SerialOld  老年代串行回收，与serial搭配使用
 
-5. ParallelOld
+5. ParallelOld PS的老年代收集器。
 
-6. CMS(Concurrent Mark Sweep) 老年代，并发的。垃圾回收和应用程序同时运行，降低STW的时间
+6. CMS(Concurrent Mark Sweep) 老年代，并发的。垃圾回收和应用程序同时运行，降低STW的时间。其一般跟**ParNew**一起搭配使用，当其预留空间放不下用户进程分配对象的需求的话，则不得不冻结所有用户进程，启用**Serial Old**收集器进行老年代的垃圾回收
 
-7. G1(10ms)
+   步骤包括：
+
+   1. 初始标记（CMS initial mark）
+   2. 并发标记（CMS concurrent mark）
+   3. 重新标记（CMS remark）
+   4. 并发清除（CMS concurrent sweep）
+
+7. G1(10ms) 逻辑分代，物理不分代
 
 8. ZGC(1ms)
 
@@ -348,8 +380,16 @@ null
 
 ​	常用的JVM参数
 
+​	-XX:+UseConcMarkSweepGC 使用CMS收集器（ParNew + CMS + Serial Old）
+
+​	-XX:CMSFullGCsBeforeCompactiom=4 使用CMS在进行4次垃圾收集之后，进行一次内存碎片整理
+
 ​	-XX:+PrintCommandLineFlags 
 
 ​	-XX:+PrintFlagsFinal 最终参数值
 
 ​	-XX:+PrintFlagsInitial 默认参数值
+
+
+
+![image-20210127200320244](D:\workspace\note\image\image-20210127200320244.png)
