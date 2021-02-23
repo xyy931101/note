@@ -365,9 +365,9 @@ inflate方法：膨胀为重量级锁
 
 ## JDK8 markword实现表：
 
-![image-20200419213508934](C:\work\courses\公开课\面试题\你以为你真的懂Synchronized\lock_step.png)
+![lock_step](D:\workspace\note\image\lock_step.png)
 
-![](C:\work\courses\公开课\面试题\你以为你真的懂Synchronized\markword-64.png)
+![markword-64](D:\workspace\note\image\markword-64.png)
 
 **自旋锁什么时候升级为重量级锁？**
 
