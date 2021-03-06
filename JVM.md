@@ -363,12 +363,70 @@ null
 
    步骤包括：
 
-   1. 初始标记（CMS initial mark）
-   2. 并发标记（CMS concurrent mark）
-   3. 重新标记（CMS remark）
-   4. 并发清除（CMS concurrent sweep）
+   1. **初始标记**（CMS initial mark）
 
-7. G1(10ms) 逻辑分代，物理不分代
+      仅仅只是标记一下 GC Roots 能直接关联到的对象，速度很快，需要停顿（STW -Stop the world）
+
+   2. **并发标记（**CMS concurrent mark）
+
+      从 GC Root 开始对堆中对象进行可达性分析，找到存活对象，它在整个回收过程中耗时最长，不需要停顿
+
+   3. **重新标记**（CMS remark）
+
+      为了修正并发标记期间因用户程序继续运作而导致标记产生变动的那一部分对象的标记记录，需要停顿(STW)。这个阶段的停顿时间一般会比初始标记阶段稍长一些，但远比并发标记的时间短
+
+   4. **并发清除**（CMS concurrent sweep）不需要停顿
+
+   ![](D:\workspace\note\image\CMS垃圾回收过程.jpg)
+
+   **CMS三个明显的缺点：**
+
+   （2）CMS收集器无法处理浮动垃圾，可能出现“Concurrent Mode Failure”失败而导致另一次Full GC的产生。在JDK1.5的默认设置下，CMS收集器当老年代使用了68%的空间后就会被激活；
+
+   （2）CMS收集器无法处理浮动垃圾，可能出现“Concurrent Mode Failure”失败而导致另一次Full GC的产生。在JDK1.5的默认设置下，CMS收集器当老年代使用了68%的空间后就会被激活。
+
+   （3）CMS是基于“标记-清除”算法实现的收集器，手机结束时会有大量空间碎片产生。空间碎片过多，可能会出现老年代还有很大空间剩余，但是无法找到足够大的连续空间来分配当前对象，不得不提前出发FullGC。
+
+   CMS**相关参数**
+
+   ```
+   #使用CMS垃圾收集器
+   -XX:UseConcMarkSweepGC              
+   
+   #每一次FullGC之后进行一次碎片整理（默认开启） Java9废弃参数
+   -XX:+UseCMSCompactAtFullCollection 
+   
+   #要求CMS执行若干次后不执行碎片整理，在进入FullGC前进行碎片整理，
+   #（默认是0，表示每次进入FullGC前都进行垃圾整理
+   -XX:+CMSFullGCsBeforeCompaction  
+   
+   #配置老年代使用率触发CMS，JDK-5是62% JDK-6是92%
+   -XX:CMSInitiatingOccu-pancyFraction    
+   
+   #是否启用类卸载功能，默认是不允许
+   -XX:+CMSClassUnloadingEnabled 
+   
+   #是否清理永久代，在java6过后就废弃了这个参数，如果添加启动项目会提示
+   #Please use CMSClassUnloadingEnabled in place of CMSPermGenSweepingEnabled in the future
+   
+   -XX:+CMSPermGenSweepingEnabled
+   ```
+
+   
+
+7. **G1(10ms) 逻辑分代，物理不分代**
+
+   ## **1. 分区（Region）**
+
+   G1采取了不同的策略来解决并行、串行和CMS收集器的碎片、暂停时间不可控制等问题——G1将整个堆分成相同大小的**分区（Region）**，如下图所示。
+
+   ![](D:\workspace\note\image\G1垃圾回收.jpg)
+
+   可参考
+
+   [可能是最全面的G1学习笔记]: https://zhuanlan.zhihu.com/p/54048685
+
+   
 
 8. ZGC(1ms)
 
