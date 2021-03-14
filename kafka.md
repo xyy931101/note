@@ -145,9 +145,8 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		对于某些不太重要的数据，对数据的可靠性要求不是很高，能够容忍数据的少量丢失， 所以没必要等 ISR 中的 follower 全部接收成功。 所以 Kafka 为用户提供了三种可靠性级别，用户根据对可靠性和延迟的要求进行权衡， 选择以下的配置。 acks 参数配置： acks： 
 
-- 0：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还 没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据； 
-
-1：producer 等待 broker 的 ack，partition 的 leader 落盘成功后返回 ack，如果在 follower 同步成功之前 leader 故障，那么将会丢失数据；
+- **0**：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还 没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据； 
+- **1**：producer 等待 broker 的 ack，partition 的 leader 落盘成功后返回 ack，如果在 follower 同步成功之前 leader 故障，那么将会丢失数据；
 
 ![image-20210307102029613](D:\workspace\note\image\kafka数据丢失.png)
 
@@ -161,8 +160,8 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 #### Log文件中的HW和LEO
 
-- LEO：指的是每个副本最大的 offset； 
-- HW：指的是消费者能见到的最大的 offset，ISR 队列中最小的 LEO。
+- LEO：指的是等钱副本最大的 **offset + 1**； 
+- HW：指的是消费者能见到的最大的 **offset + 1**，ISR 队列中最小的 LEO。
 
 #### follower 故障 
 
@@ -285,7 +284,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 1. 一个对象的内存消耗是非常高的，经常是所存数据的两倍或者更多。
 2. 随着堆内数据的增多，Java的垃圾回收会变得非常昂贵。
 
-基 于这些事实，利用文件系统并且依靠页缓存比维护一个内存缓存或者其他结构要好——我们至少要使得可用的缓存加倍，通过自动访问可用内存，并且通过存储更紧 凑的字节结构而不是一个对象，这将有可能再次加倍。这么做的结果就是在一台32GB的机器上，如果不考虑GC惩罚，将最多有28-30GB的缓存。此外， 这些缓存将会一直存在即使服务重启，然而进程内缓存需要在内存中重构（10GB缓存需要花费10分钟）或者它需要一个完全冷缓存启动（非常差的初始化性 能）。它同时也简化了代码，因为现在所有的维护缓存和文件系统之间内聚的逻辑都在操作系统内部了，这使得这样做比one-off in-process attempts更加高效与准确。如果你的磁盘应用更加倾向于顺序读取，那么read-ahead在每次磁盘读取中实际上获取到这人缓存中的有用数据。
+基于这些事实，利用文件系统并且依靠页缓存比维护一个内存缓存或者其他结构要好——我们至少要使得可用的缓存加倍，通过自动访问可用内存，并且通过存储更紧 凑的字节结构而不是一个对象，这将有可能再次加倍。这么做的结果就是在一台32GB的机器上，如果不考虑GC惩罚，将最多有28-30GB的缓存。此外， 这些缓存将会一直存在即使服务重启，然而进程内缓存需要在内存中重构（10GB缓存需要花费10分钟）或者它需要一个完全冷缓存启动（非常差的初始化性 能）。它同时也简化了代码，因为现在所有的维护缓存和文件系统之间内聚的逻辑都在操作系统内部了，这使得这样做比one-off in-process attempts更加高效与准确。如果你的磁盘应用更加倾向于顺序读取，那么read-ahead在每次磁盘读取中实际上获取到这人缓存中的有用数据。
 以 上这些建议了一个简单的设计：不同于维护尽可能多的内存缓存并且在需要的时候刷新到文件系统中，我们换一种思路。所有的数据不需要调用刷新程序，而是立刻 将它写到一个持久化的日志中。事实上，这仅仅意味着，数据将被传输到内核页缓存中并稍后被刷新。我们可以增加一个配置项以让系统的用户来控制数据在什么时 候被刷新到物理硬盘上。
 
 ### 常数时间性能保证
@@ -320,7 +319,13 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 # Producer API 消息发送流程
 
-​		Kafka 的 Producer 发送消息采用的是异步发送的方式。在消息发送的过程中，涉及到了 两个线程——main 线程和 Sender 线程，以及一个线程共享变量——RecordAccumulator。 main 线程将消息发送给 RecordAccumulator，Sender 线程不断从 RecordAccumulator 中拉取 消息发送到 Kafka broker。
+​		Kafka 的 Producer 发送消息采用的是异步发送的方式。在消息发送的过程中，涉及到了 两个线程——main 线程和 Sender 线程，以及一个线程共享变量——RecordAccumulator。 main 线程将消息发送给 RecordAccumulator，Sender 线程不断从 RecordAccumulator 中拉取 消息发送到 Kafka broker。RecordAccumulator大小可以通过参数`buffer.memory`进行调整，默认大小为**32M**
 
 ![image-20210307110628643](D:\workspace\note\image\kafka生产者API流程图.png)
+
+### 发送的三种方式
+
+- 发后即忘：
+- 同步
+- 异步
 
