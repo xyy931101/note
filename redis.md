@@ -2,13 +2,93 @@
 
 ### Ziplist(压缩列表)
 
+ziplist是由一系列特殊编码的连续内存块组成的顺序存储结构，类似于数组，ziplist在内存中是连续存储的，但是不同于数组，为了节省内存 ziplist的每个元素所占的内存大小可以不同（数组中叫元素，ziplist叫节点entry，下文都用“节点”），每个节点可以用来存储一个整数或者一个字符串。
+
+![](D:\workspace\note\image\redis\ziplist.png)
+
+zlbytes: ziplist的长度（单位: 字节)，是一个32位无符号整数
+zltail: ziplist最后一个节点的偏移量，反向遍历ziplist或者pop尾部节点的时候有用。
+zllen: ziplist的节点（entry）个数
+entry: 节点
+zlend: 值为0xFF，用于标记ziplist的结尾
+普通数组的遍历是根据数组里存储的数据类型 找到下一个元素的，例如int类型的数组访问下一个元素时每次只需要移动一个sizeof(int)就行（实际上开发者只需让指针p+1就行，在这里引入sizeof(int)只是为了说明区别）。
+上文说了，ziplist的每个节点的长度是可以不一样的，而我们面对不同长度的节点又不可能直接sizeof(entry)，那么它是怎么访问下一个节点呢？
+ziplist将一些必要的偏移量信息记录在了每一个节点里，使之能跳到上一个节点或下一个节点。
+接下来我们看看节点的布局
+
+节点的布局(entry)
+
+每个节点由三部分组成：prevlength、encoding、data
+
 ### Skiplist(跳跃表)
 
 ​	主要用于有序集合键(**有序集合节点数>128或值的长度大于64**)，集群节点中用作内部数据结构
 
 **实现**
 
+为了满足自身的功能需要， Redis 基于 William Pugh 论文中描述的跳跃表进行了以下修改：
+
+1. 允许重复的 `score` 值：多个不同的 `member` 的 `score` 值可以相同。
+2. 进行对比操作时，不仅要检查 `score` 值，还要检查 `member` ：当 `score` 值可以重复时，单靠 `score` 值无法判断一个元素的身份，所以需要连 `member` 域都一并检查才行。
+3. 每个节点都带有一个高度为 1 层的后退指针，用于从表尾方向向表头方向迭代：当执行 [ZREVRANGE](http://redis.readthedocs.org/en/latest/sorted_set/zrevrange.html#zrevrange) 或 [ZREVRANGEBYSCORE](http://redis.readthedocs.org/en/latest/sorted_set/zrevrangebyscore.html#zrevrangebyscore) 这类以逆序处理有序集的命令时，就会用到这个属性。
+
+这个修改版的跳跃表由 `redis.h/zskiplist` 结构定义：
+
+```c
+typedef struct zskiplist {
+
+    // 头节点，尾节点
+    struct zskiplistNode *header, *tail;
+
+    // 节点数量
+    unsigned long length;
+
+    // 目前表内节点的最大层数
+    int level;
+
+} zskiplist;
+```
+
+跳跃表的节点由 `redis.h/zskiplistNode` 定义：
+
+
+
 # Redis的数据类型
+
+```c
+typedef struct zskiplistNode {
+
+    // member 对象
+    robj *obj;
+
+    // 分值
+    double score;
+
+    // 后退指针
+    struct zskiplistNode *backward;
+
+    // 层
+    struct zskiplistLevel {
+
+        // 前进指针
+        struct zskiplistNode *forward;
+
+        // 这个层跨越的节点数量
+        unsigned int span;
+
+    } level[];
+
+} zskiplistNode;
+```
+
+![image-20210329234923723](D:\workspace\note\image\skiplist.jpg)
+
+- 跳跃表是一种随机化数据结构，查找、添加、删除操作都可以在对数期望时间下完成。
+- 跳跃表目前在 Redis 的唯一作用，就是作为有序集类型的底层数据结构（之一，另一个构成有序集的结构是字典）。
+- 为了满足自身的需求，Redis 基于 William Pugh 论文中描述的跳跃表进行了修改，包括：
+  1. `score` 值可重复。
+  2. 对比一个元素需要同时检查它的 `score` 和 `memeber` 。
+  3. 每个节点带有高度为 1 层的后退指针，用于从表尾方向向表头方向迭代。
 
 ## String（字符串对象）
 
