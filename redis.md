@@ -1,4 +1,40 @@
+# Redis键值对
+
+​	为了实现从键到值的快速访问，Redis 使用了一个哈希表来保存所有键值对。一个哈希表，其实就是一个数组，数组的每个元素称为一个哈希桶。所以，我们常说，一个哈希表是由多个哈希桶组成的，每个哈希桶中保存了键值对数据。
+
+在下图中，可以看到，哈希桶中的 entry 元素中保存了*key和*value指针，分别指向了实际的键和值，这样一来，即使值是一个集合，也可以通过*value指针被查找到
+
+![](D:\workspace\note\image\redis\Redis全局hash表结构.jpg)
+
+因为这个哈希表保存了所有的键值对，所以，我也把它称为全局哈希表。哈希表的最大好处很明显，就是让我们可以用 O(1) 的时间复杂度来快速查找到键值对——我们只需要计算键的哈希值，就可以知道它所对应的哈希桶位置，然后就可以访问相应的 entry 元素。
+
+## Redis hash冲突
+
+​		Redis 解决哈希冲突的方式，就是链式哈希。链式哈希也很容易理解，就是指同一个哈希桶中的多个元素用一个链表来保存，它们之间依次用指针连接。
+
+## 渐进式 rehash
+
+Redis 默认使用了两个全局哈希表：哈希表 1 和哈希表 2。一开始，当你刚插入数据时，默认使用哈希表 1，此时的哈希表 2 并没有被分配空间。随着数据逐步增多，Redis 开始执行 rehash，这个过程分为三步：
+
+1. 给哈希表 2 分配更大的空间，例如是当前哈希表 1 大小的两倍；
+
+2. 把哈希表 1 中的数据重新映射并拷贝到哈希表 2 中；
+
+   第二步拷贝数据时，Redis 仍然正常处理客户端请求，每处理一个请求时，从哈希表 1 中的第一个索引位置开始，顺带着将这个索引位置上的所有 entries 拷贝到哈希表 2 中；等处理下一个请求时，再顺带拷贝哈希表 1 中的下一个索引位置的 entries。如下图所示：
+
+3. 释放哈希表 1 的空间。
+
+   ![](D:\workspace\note\image\redis\渐进式rehash.jpg)
+
 # Redis的数据结构
+
+### SDS
+
+​	
+
+### LinkList
+
+### Hashtable
 
 ### Ziplist(压缩列表)
 
@@ -51,7 +87,7 @@ typedef struct zskiplist {
 
 跳跃表的节点由 `redis.h/zskiplistNode` 定义：
 
-
+### IntSet（整数集合）
 
 # Redis的数据类型
 
@@ -90,7 +126,7 @@ typedef struct zskiplistNode {
   2. 对比一个元素需要同时检查它的 `score` 和 `memeber` 。
   3. 每个节点带有高度为 1 层的后退指针，用于从表尾方向向表头方向迭代。
 
-## String（字符串对象）
+### String（字符串对象）
 
 - **int** 当一个字符串是整数值得话，是以int类型保存的
 
@@ -103,11 +139,6 @@ typedef struct zskiplistNode {
   3. 所有数据都保存在一块，所以速度更快
 
   embstr实际上是只读的，当我们对embstr进行修改的时候，无论长度多少，总会变成raw
-
-
-
-1. SDS_TYPE_5:		
-2. SDS_TYPE_8:
 
 ### lsit（列表对象）
 
@@ -161,7 +192,13 @@ ziplist作为有序集合时候，每个集合使用紧紧相邻的两个节点�
 
 - 有序集合所有元素成员长度都小于64
 
-  <!--可以修改配置文件-->
+  
+
+### Redis数据结构与数据类型的关系
+
+
+
+![](D:\workspace\note\image\redis\redis数据类型.jpg)
 
 # Redis的持久化
 
@@ -324,7 +361,14 @@ Redis Cluster是一种服务端Sharding技术，3.0版本开始正式提供。Re
 
 # Redis的过期键的删除策略
 
-我们都知道，Redis是key-value数据库，我们可以设置Redis中缓存的key的过期时间。Redis的过期策略就是指当Redis中缓存的key过期了，在RedisDB中，专门有expires字典保存过期时间与键值的关系
+我们都知道，Redis是key-value数据库，我们可以设置Redis中缓存的key的过期时间。(四种命令,但是最后走的都是PEXPIREAT )
+
+- EXPIRE 将键key的生存时间设置为ttl秒
+- PEXPIRE 将键key的生存时间设置为ttl毫秒
+- EXPIREAT 将键key的过期时间设置为timestamp所设置的秒数时间戳
+- PEXPIREAT 将键key的过期时间设置为timestamp锁设置的毫秒时间戳
+
+Redis的过期策略就是指当Redis中缓存的key过期了，在RedisDB中，专门有expires字典保存过期时间与键值的关系
 
 过期策略通常有以下三种：
 
@@ -334,7 +378,11 @@ Redis Cluster是一种服务端Sharding技术，3.0版本开始正式提供。Re
 
 (expires字典会保存所有设置了过期时间的key的过期时间数据，其中，key是指向键空间中的某个键的指针，value是该键的毫秒精度的UNIX时间戳表示的过期时间。键空间是指该Redis集群中保存的所有键。)
 
-Redis中同时使用了惰性过期和定期过期两种过期策略。
+Redis中同时使用了**惰性过期和定期过期**两种过期策略。
+
+惰性删除：所有的读写操作会经过expireIfNeeded函数,如果过期就了删除,不执行下面的流程
+
+定期删除：每当redis服务器执行周期性函数 `redis.c/sercerCron` 会执行`activeExpireCycle` 从过期字典中随机获取一部分过期的键进行删除
 
 ## Redis的内存淘汰策略
 
