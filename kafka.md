@@ -139,7 +139,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 #### ISR 
 
-​		采用第二种方案之后，设想以下情景：leader 收到数据，所有 follower 都开始同步数据， 但有一个 follower，因为某种故障，迟迟不能与 leader 进行同步，那 leader 就要一直等下去， 直到它完成同步，才能发送 ack。这个问题怎么解决呢？ Leader 维护了一个动态的 in-sync replica set (ISR)，意为和 leader 保持同步的 follower 集 合。当 ISR 中的 follower 完成数据的同步之后，leader 就会给 follower 发送 ack。如果 follower 长时间 未 向 leader 同 步 数 据 ， 则 该 follower 将 被 踢 出 ISR ， 该 时 间 阈 值 由replica.lag.time.max.ms 参数设定。Leader 发生故障之后，就会从 ISR 中选举新的 leader。
+​		采用第二种方案之后，设想以下情景：leader 收到数据，所有 follower 都开始同步数据， 但有一个 follower，因为某种故障，迟迟不能与 leader 进行同步，那 leader 就要一直等下去， 直到它完成同步，才能发送 ack。这个问题怎么解决呢？ Leader 维护了一个动态的 in-sync replica set (ISR)，意为和 leader 保持同步的 follower 集 合。当 ISR 中的 follower 完成数据的同步之后，leader 就会给 follower 发送 ack。如果follower长时间未向leader同步 数据 ，则该follower将被踢出ISR ，该时间 阈 值 由replica.lag.time.max.ms 参数设定。Leader 发生故障之后，就会从 ISR 中选举新的 leader。
 
 #### ack 应答机制 
 
@@ -160,7 +160,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 #### Log文件中的HW和LEO
 
-- LEO：指的是等钱副本最大的 **offset + 1**； 
+- LEO：指的是当前副本最大的 **offset + 1**； 
 - HW：指的是消费者能见到的最大的 **offset + 1**，ISR 队列中最小的 LEO。
 
 #### follower 故障 
@@ -209,7 +209,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 #### offset 的维护
 
-​		由于 consumer 在消费过程中可能会出现断电宕机等故障，consumer 恢复后，需要从故 障前的位置的继续消费，所以 consumer 需要实时记录自己消费到了哪个 offset，以便故障恢 复后继续消费。
+​		由于 consumer 在消费过程中可能会出现断电宕机等故障，consumer 恢复后，需要从故 障前的位置的继续消费，所以 consumer 需要实时记录自己消费到了哪个 offset，以便故障恢 复后继续消费。consumer在维护offset的过程中，是根据**groupId跟partition**来维护offset的，即这样可以一定程度的避免rebalance过程中，避免同一消息被重复消费。
 
 ![image-20210307105459616](D:\workspace\note\image\kafka zookeeper节点.png)
 

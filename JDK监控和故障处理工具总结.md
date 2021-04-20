@@ -18,6 +18,8 @@ jstack
 
 jmap
 
+-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/deploy/logs/dump
+
 **其实最好是在服务器启动的时候加上VM参数  -XX:+HeapDumpOnOutOfMemoryError  可以让虚拟机在 OOM 异常出现之后自动生成 dump 文件，Linux 命令下可以通过 `kill -3` 发送进程退出信号也能拿到 dump 文件**
 
 
