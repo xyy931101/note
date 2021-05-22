@@ -193,6 +193,57 @@ TCP可以看成是一种字节流，它会处理IP层或以下的层的丢包、
 - 第三次挥手：服务端将最后数据(比如50个字节)发送完毕后就向客户端发出连接释放报文，报文包含FIN和ACK标志位(FIN=1,ACK=1)、确认号和第二次挥手一样ack=1102、序列号seq=2350(2300+50)。
 - 第四次挥手：客户端收到服务端发的FIN报文后，向服务端发出确认报文，确认报文包含ACK标志位(ACK=1)、确认号ack=2351、序列号seq=1102。注意客户端发出确认报文后不是立马释放TCP连接，而是要经过2MSL(最长报文段寿命的2倍时长)后才释放TCP连接。而服务端一旦收到客户端发出的确认报文就会立马释放TCP连接，所以服务端结束TCP连接的时间要比客户端早一些。
 
+# KeepAlive详解
+
+### TCP的KeepAlive
+
+​		链接建立之后，如果应用程序或者上层协议一直不发送数据，或者隔很长时间才发送一次数据，当链接很久没有数据报文传输时如何去确定对方还在线，到底是掉线了还是确实没有数据传输，链接还需不需要保持，这种情况在TCP协议设计中是需要考虑到的。
+
+TCP协议通过一种巧妙的方式去解决这个问题，当超过一段时间之后，TCP自动发送一个数据为空的报文给对方，如果对方回应了这个报文，说明对方还在线，链接可以继续保持，如果对方没有报文返回，并且重试了多次之后则认为链接丢失，没有必要保持链接。
+
+##### 怎么开启KeepAlive？
+
+KeepAlive并不是默认开启的，在Linux系统上没有一个全局的选项去开启TCP的KeepAlive。需要开启KeepAlive的应用必须在TCP的socket中单独开启。Linux Kernel有三个选项影响到KeepAlive的行为：
+
+> - tcp_keepalive_time 7200// 距离上次传送数据多少时间未收到新报文判断为开始检测，单位秒，默认7200s
+> - tcp_keepalive_intvl 75// 检测开始每多少时间发送心跳包，单位秒，默认75s
+> - tcp_keepalive_probes 9// 发送几次心跳包对方未响应则close连接，默认9次
+
+TCP socket也有三个选项和内核对应，通过setsockopt系统调用针对单独的socket进行设置：
+
+> - TCPKEEPCNT: 覆盖 tcpkeepaliveprobes
+> - TCPKEEPIDLE: 覆盖 tcpkeepalivetime
+> - TCPKEEPINTVL: 覆盖 tcpkeepalive_intvl
+
+举个例子，以我的系统默认设置为例，kernel默认设置的tcpkeepalivetime是7200s, 如果我在应用程序中针对socket开启了KeepAlive,然后设置的TCP_KEEPIDLE为60，那么TCP协议栈在发现TCP链接空闲了60s没有数据传输的时候就会发送第一个探测报文。
+
+##### 需要注意，KeepAlive的不足和局限性
+
+其实，tcp自带的keepalive还是有些不足之处的。
+
+**keepalive只能检测连接是否存活，不能检测连接是否可用。**例如，某一方发生了死锁，无法在连接上进行任何读写操作，但是操作系统仍然可以响应网络层keepalive包。
+
+TCP keepalive 机制依赖于操作系统的实现,灵活性不够，默认关闭，且默认的 keepalive 心跳时间是 两个小时, 时间较长。
+
+代理(如socks proxy)、或者负载均衡器，会让tcp keep-alive失效
+
+### HTTP的Keep-Alive
+
+##### HTTP为什么需要Keep-Alive？
+
+通常一个网页可能会有很多组成部分，除了文本内容，还会有诸如：js、css、图片等静态资源，有时还会异步发起AJAX请求。只有所有的资源都加载完毕后，我们看到网页完整的内容。然而，一个网页中，可能引入了几十个js、css文件，上百张图片，如果每请求一个资源，就创建一个连接，然后关闭，代价实在太大了。
+
+基于此背景，我们希望连接能够在**短时间内**得到复用，在加载同一个网页中的内容时，尽量的复用连接，这就是HTTP协议中keep-alive属性的作用。
+
+> - HTTP的Keep-Alive是**HTTP1.1**中**默认开启**的功能。通过headers设置"Connection: close "关闭
+> - 在HTTP1.0中是**默认关闭**的。通过headers设置"Connection: Keep-Alive"开启。
+
+对于客户端来说，不论是浏览器，还是手机App，或者我们直接在Java代码中使用HttpUrlConnection，只是负责在请求头中设置Keep-Alive。Keep-Alive属性保持连接的**时间长短是由服务端决定的**，通常配置都是在**几十秒左右。**
+
+TCP连接建立之后，HTTP协议使用TCP传输HTTP协议的请求(Request)和响应(Response)数据
+
+
+
 ### 常见面试题
 
 ### 为什么TCP连接的时候是3次？2次不可以吗？
