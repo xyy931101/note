@@ -1,6 +1,6 @@
 # 简介
 
-![](D:\workspace\note\image\kafka拓扑图.png)
+![](\image\kafka拓扑图.png)
 
 1. **Producer** ：消息生产者，就是向kafka broker 发消息的客户端；
 2. **Consumer** ：消息消费者，向kafka broker 取消息的客户端；
@@ -24,7 +24,7 @@
 
 ### Kafka 工作流程及文件存储机制
 
-![image-20210306200903654](D:\workspace\note\image\kafka工作流程png)
+![image-20210306200903654](\image\kafka工作流程png)
 
 Kafka 中消息是以 topic 进行分类的，生产者生产消息，消费者消费消息，都是面向 topic 的。 topic 是逻辑上的概念，而 partition 是物理上的概念，每个 partition 对应于一个 log 文 件，该 log 文件中存储的就是 producer 生产的数据。Producer 生产的数据会被不断追加到该 log 文件末端，且每条数据都有自己的 offset。消费者组中的每个消费者，都会实时记录自己 消费到了哪个 offset，以便出错恢复时，从上次的位置继续消费。
 
@@ -103,7 +103,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		Kafka 允许为每条消息定义消息键，简称为 Key。这个 Key 的作用非常大，它可以是一个有着明确业务含义的字符串，比如客户代码、部门编号或是业务 ID 等；也可以用来表征消息元数据。特别是在 Kafka 不支持时间戳的年代，在一些场景中，工程师们都是直接将消息创建时间封装进 Key 里面的。一旦消息被定义了 Key，那么你就可以保证同一个 Key 的所有消息都进入到相同的分区里面，由于每个分区下的消息处理都是有顺序的，故这个策略被称为按消息键保序策略，如下图所示。
 
-![](D:\workspace\note\image\kafka按消息键保序策略.png)
+![](image\kafka按消息键保序策略.png)
 
 #### 分区的原因 
 
@@ -123,7 +123,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
    **为保证 producer 发送的数据，能可靠的发送到指定的 topic，topic 的每个 partition 收到 producer 发送的数据后，都需要向 producer 发送 ack（acknowledgement 确认收到），如果 producer 收到 ack，就会进行下一轮的发送，否则重新发送数据。**
 
-   ![image-20210306202400438](D:\workspace\note\image\kafka生产者消息发送.png)
+   ![image-20210306202400438](\image\kafka生产者消息发送.png)
 
 #### 副本数据同步策略
 
@@ -152,7 +152,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 - **-1**（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower 全部落盘成功后才 返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会 造成数据重复
 
-![](D:\workspace\note\image\kafaka ack生产者数据重复.png)
+![](\image\kafaka ack生产者数据重复.png)
 
 
 
@@ -211,7 +211,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		由于 consumer 在消费过程中可能会出现断电宕机等故障，consumer 恢复后，需要从故 障前的位置的继续消费，所以 consumer 需要实时记录自己消费到了哪个 offset，以便故障恢 复后继续消费。consumer在维护offset的过程中，是根据**groupId跟partition**来维护offset的，即这样可以一定程度的避免rebalance过程中，避免同一消息被重复消费。
 
-![image-20210307105459616](D:\workspace\note\image\kafka zookeeper节点.png)
+![image-20210307105459616](\image\kafka zookeeper节点.png)
 
 ### Kafka 高效读写数据
 
@@ -221,7 +221,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 - **零复制技术**
 
-  ![image-20210307105739163](D:\workspace\note\image\kafka零拷贝.png)
+  ![image-20210307105739163](\image\kafka零拷贝.png)
 
 
 
@@ -233,7 +233,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		以下为 partition 的 leader 选举过程：
 
-![image-20210307110326373](D:\workspace\note\image\kafka分区leader选举.png)
+![image-20210307110326373](\image\kafka分区leader选举.png)
 
 ## Kafka 事务
 
@@ -321,7 +321,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		Kafka 的 Producer 发送消息采用的是异步发送的方式。在消息发送的过程中，涉及到了 两个线程——main 线程和 Sender 线程，以及一个线程共享变量——RecordAccumulator。 main 线程将消息发送给 RecordAccumulator，Sender 线程不断从 RecordAccumulator 中拉取 消息发送到 Kafka broker。RecordAccumulator大小可以通过参数`buffer.memory`进行调整，默认大小为**32M**
 
-![image-20210307110628643](D:\workspace\note\image\kafka生产者API流程图.png)
+![image-20210307110628643](\image\kafka生产者API流程图.png)
 
 ### 发送的三种方式
 

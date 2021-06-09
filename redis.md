@@ -4,7 +4,7 @@
 
 在下图中，可以看到，哈希桶中的 entry 元素中保存了*key和*value指针，分别指向了实际的键和值，这样一来，即使值是一个集合，也可以通过*value指针被查找到
 
-![](D:\workspace\note\image\redis\Redis全局hash表结构.jpg)
+![](\image\redis\Redis全局hash表结构.jpg)
 
 因为这个哈希表保存了所有的键值对，所以，我也把它称为全局哈希表。哈希表的最大好处很明显，就是让我们可以用 O(1) 的时间复杂度来快速查找到键值对——我们只需要计算键的哈希值，就可以知道它所对应的哈希桶位置，然后就可以访问相应的 entry 元素。
 
@@ -24,7 +24,7 @@ Redis 默认使用了两个全局哈希表：哈希表 1 和哈希表 2。一开
 
 3. 释放哈希表 1 的空间。
 
-   ![](D:\workspace\note\image\redis\渐进式rehash.jpg)
+   ![](\image\redis\渐进式rehash.jpg)
 
 # Redis的数据结构
 
@@ -121,7 +121,7 @@ typedef struct dictEntry {//hash节点
 
 ziplist是由一系列特殊编码的连续内存块组成的顺序存储结构，类似于数组，ziplist在内存中是连续存储的，但是不同于数组，为了节省内存 ziplist的每个元素所占的内存大小可以不同（数组中叫元素，ziplist叫节点entry，下文都用“节点”），每个节点可以用来存储一个整数或者一个字符串。
 
-![](D:\workspace\note\image\redis\ziplist.png)
+![](\image\redis\ziplist.png)
 
 ```c
 typedef struct zlentry {
@@ -159,7 +159,7 @@ ziplist将一些必要的偏移量信息记录在了每一个节点里，使之�
 
 ​	主要用于有序集合键(**有序集合节点数>128或值的长度大于64**)，集群节点中用作内部数据结构
 
-![image-20210329234923723](D:\workspace\note\image\skiplist.jpg)
+![image-20210329234923723](\image\skiplist.jpg)
 
 **实现**
 
@@ -336,7 +336,7 @@ ziplist作为有序集合时候，每个集合使用紧紧相邻的两个节点�
 
 ### Redis数据结构与数据类型的关系
 
-![](D:\workspace\note\image\redis\redis数据类型.jpg)
+![](\image\redis\redis数据类型.jpg)
 
 # Redis的持久化
 
@@ -368,7 +368,7 @@ ziplist作为有序集合时候，每个集合使用紧紧相邻的两个节点�
 1. 将AOF重写缓冲区所有数据写入到新的AOF文件，保持数据库跟AOF文件的状态一致
 2. 对新的AOF文件进行改名，原子的（atomic）覆盖现有的AOF文件，完成新旧AOF文件的替换
 
-![6b054eb1aed0734bd81ddab9a31d0be8](D:\workspace\note\image\6b054eb1aed0734bd81ddab9a31d0be8.jpg)
+![6b054eb1aed0734bd81ddab9a31d0be8](\image\6b054eb1aed0734bd81ddab9a31d0be8.jpg)
 
 
 
@@ -416,7 +416,7 @@ Redis 提供了两个命令来生成 RDB 文件，分别是 save 和 bgsave
 
 
 
-![4dc5fb99a1c94f70957cce1ffef419cc](D:\workspace\note\image\4dc5fb99a1c94f70957cce1ffef419cc.jpg)
+![4dc5fb99a1c94f70957cce1ffef419cc](\image\4dc5fb99a1c94f70957cce1ffef419cc.jpg)
 
 # Redis的过期键的删除策略
 
@@ -469,9 +469,9 @@ Redis基于Reactor模式开发了网络事件处理器，这个处理器被称�
 
 虽然文件事件处理器以单线程方式运行， 但通过使用 I/O 多路复用程序来监听多个套接字， 文件事件处理器既实现了高性能的网络通信模型， 又可以很好地与 redis 服务器中其他同样以单线程方式运行的模块进行对接， 这保持了 Redis 内部单线程设计的简单性。
 
-![](D:\workspace\note\image\redis\redis线程模型.png)
+![](\image\redis\redis线程模型.png)
 
-![](D:\workspace\note\image\redis\redis.png)
+![](\image\redis\redis.png)
 
 # 事件
 
@@ -522,11 +522,11 @@ Redis基于Reactor模式开发了网络事件处理器，这个处理器被称�
 - 在第二阶段，主库将所有数据同步给从库。从库收到数据后，在本地完成数据加载。这个过程依赖于内存快照生成的 RDB 文件。
 - 最后，也就是第三个阶段，主库会把第二阶段执行过程中新收到的写命令，再发送给从库。具体的操作是，当主库完成 RDB 文件发送后，就会把此时 replication buffer 中的修改操作发给从库，从库再重新执行这些操作。这样一来，主从库就实现同步了。
 
-![redis主从过程](D:\workspace\note\image\redis主从过程.jpg)
+![redis主从过程](\image\redis主从过程.jpg)
 
 增量复制时，主从库之间具体是怎么保持同步的呢？这里的奥妙就在于 repl_backlog_buffer (默认大小为1MB)这个缓冲区。我们先来看下它是如何用于增量命令的同步的。当主从库断连后，主库会把断连期间收到的写操作命令，写入 replication buffer，同时也会把这些操作命令也写入 repl_backlog_buffer 这个缓冲区。repl_backlog_buffer 是一个环形缓冲区(**FIFO**)，主库会记录自己写到的位置，从库则会记录自己已经读到的位置。
 
-![redis主从增量复制](D:\workspace\note\image\redis主从增量复制.jpg)
+![redis主从增量复制](\image\redis主从增量复制.jpg)
 
 ## **哨兵集群  Redis  Sentinel**
 
@@ -552,7 +552,7 @@ Redis基于Reactor模式开发了网络事件处理器，这个处理器被称�
 
 哨兵只要和主库建立起了连接，就可以在主库上发布消息了，比如说发布它自己的连接信息（IP 和端口）。同时，它也可以从主库上订阅消息，获得其他哨兵发布的连接信息。当多个哨兵实例都在主库上做了发布和订阅操作后，它们之间就能知道彼此的 IP 地址和端口。
 
-![](D:\workspace\note\image\redis哨兵.jpg)
+![](\image\redis哨兵.jpg)
 
 
 
@@ -571,7 +571,7 @@ sentinel在对判断服务器是否下线有两种：即主观下线与客观下
 
 确定由哪个哨兵执行主从切换的过程，和主库“客观下线”的判断过程类似，也是一个“投票仲裁”的过程。在具体了解这个过程前，我们再来看下，判断“客观下线”的仲裁过程。哨兵集群要判定主库“客观下线”，需要有一定数量的实例都认为该主库已经“主观下线”了。我在上节课向你介绍了判断“客观下线”的原则，接下来，我介绍下具体的判断过程。任何一个实例只要自身判断主库“主观下线”后，就会给其他实例发送 is-master-down-by-addr 命令。接着，其他实例会根据自己和主库的连接情况，做出 Y 或 N 的响应，Y 相当于赞成票，N 相当于反对票。
 
-![](D:\workspace\note\image\redis\哨兵leader选举.jpg)
+![](\image\redis\哨兵leader选举.jpg)
 
 **哨兵用于实现 redis 集群的高可用**，本身也是分布式的，作为一个哨兵集群去运行，互相协同工作。
 
@@ -589,7 +589,7 @@ sentinel在对判断服务器是否下线有两种：即主观下线与客观下
 
 ## **切片集群   Redis Cluster**
 
-![](D:\workspace\note\image\redis cluster.jpg)
+![](\image\redis cluster.jpg)
 
 **简介**
 
@@ -666,7 +666,7 @@ ASK 命令表示两层含义：
 
 ​	第二，ASK 命令把客户端所请求数据的最新实例地址返回给客户端，此时，客户端需要给实例 3 发送 ASKING 命令，然后再发送操作命令。
 
-![](D:\workspace\note\image\redis\cluster迁移过程.jpg)
+![](\image\redis\cluster迁移过程.jpg)
 
 
 
@@ -732,7 +732,7 @@ Redis 是单进程程序，并且它保证在执行事务时，不会对事务�
 
 # **Redisson实现Redis分布式锁的底层原理**
 
-![](D:\workspace\note\image\redis分布式锁.png)
+![](\image\redis分布式锁.png)
 
 
 
@@ -761,7 +761,7 @@ Redis6.0的多线程默认是禁用的，只使用主线程。如需开启需要
 
 ## **Redis6.0多线程的实现机制**
 
-![](D:\workspace\note\image\redis\redis多线程实现机制.png)
+![](\image\redis\redis多线程实现机制.png)
 
 **流程简述如下**：
 
@@ -772,4 +772,4 @@ Redis6.0的多线程默认是禁用的，只使用主线程。如需开启需要
 5、主线程阻塞等待 IO 线程将数据回写 socket 完毕
 6、解除绑定，清空等待队列
 
-![](D:\workspace\note\image\redis\redis线程执行流程.png)
+![](\image\redis\redis线程执行流程.png)
