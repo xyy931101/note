@@ -8,7 +8,7 @@ Dubbo 大致上分为三层，分别是：
 - **RPC 层**
 - **Remoting 层**
 
-![](D:\workspace\note\image\dubbo\dubbo分层.jpg)
+![](\image\dubbo\dubbo分层.jpg)
 
 从上图中可以看到，三层结构中包含了 Dubbo 的核心组件。他们的基本功能如下，对于比较常用的组件，会在后面的篇幅中详细讲解。
 

@@ -24,11 +24,11 @@
 
 ### Kafka 工作流程及文件存储机制
 
-![image-20210306200903654](\image\kafka工作流程png)
+![image-20210306200903654](.\image\kafka工作流程.jpeg)
 
 Kafka 中消息是以 topic 进行分类的，生产者生产消息，消费者消费消息，都是面向 topic 的。 topic 是逻辑上的概念，而 partition 是物理上的概念，每个 partition 对应于一个 log 文 件，该 log 文件中存储的就是 producer 生产的数据。Producer 生产的数据会被不断追加到该 log 文件末端，且每条数据都有自己的 offset。消费者组中的每个消费者，都会实时记录自己 消费到了哪个 offset，以便出错恢复时，从上次的位置继续消费。
 
-![image-20210306201205744](D:\workspace\note\image\kafka文件存储机制.png)
+![image-20210306201205744](.\image\kafka文件存储机制.png)
 
 由于生产者生产的消息会不断追加到 log 文件末尾，为防止 log 文件过大导致数据定位 效率低下，Kafka 采取了分片和索引机制，将每个 partition 分为多个 segment。每个 segment 对应两个文件——“.index”文件和“.log”文件。这些文件位于一个文件夹下，该文件夹的命名 规则为：topic 名称+分区序号。例如，first 这个 topic 有三个分区，则其对应的文件夹为 first0,first-1,first-2。
 
@@ -43,7 +43,7 @@ Kafka 中消息是以 topic 进行分类的，生产者生产消息，消费者�
 
 index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下图为 index 文件和 log 文件的结构示意图。
 
-![image-20210306201647491](D:\workspace\note\image\kafka-index文件和log文件详解.png)
+![image-20210306201647491](\image\kafka-index文件和log文件详解.png)
 
 “.index”文件存储大量的索引信息，“.log”文件存储大量的数据，索引文件中的元 数据指向对应数据文件中 message 的物理偏移地址。
 
@@ -51,7 +51,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 #### 生产者客户端整体架构
 
-![](D:\workspace\note\image\Kafka生产者客户端整体架构.png)
+![](\image\Kafka生产者客户端整体架构.png)
 
 ​		整个生产者客户端主要有两个线程，主线程以及Sender线程。Producer在主线程中产生消息，然后通过拦截器，序列化器，分区器之后缓存到消息累加器RecordAccumulator中。Sender线程从RecordAccumulator中获取消息并发送到kafka中
 
@@ -74,7 +74,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 ​		也称 Round-robin 策略，即顺序分配。比如一个主题下有 3 个分区，那么第一条消息被发送到分区 0，第二条被发送到分区 1，第三条被发送到分区 2，以此类推。当生产第 4 条消息时又会重新开始，即将其分配到分区 0，就像下面这张图展示的那样。
 
-![](D:\workspace\note\image\kafaka轮询策略.png)
+![](\image\kafaka轮询策略.png)
 
 ​		这就是所谓的轮询策略。轮询策略是 Kafka Java 生产者 API 默认提供的分区策略。如果你未指定`partitioner.class`参数，那么你的生产者程序会按照轮询的方式在主题的所有分区间均匀地“码放”消息。
 
@@ -84,7 +84,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 也称 Randomness 策略。所谓随机就是我们随意地将消息放置到任意一个分区上，如下面这张图所示。
 
-![](D:\workspace\note\image\kafka随机策略.png)
+![](\image\kafka随机策略.png)
 
 如果要实现随机策略版的 partition 方法，很简单，只需要两行代码即可：
 
@@ -148,7 +148,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 - **0**：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还 没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据； 
 - **1**：producer 等待 broker 的 ack，partition 的 leader 落盘成功后返回 ack，如果在 follower 同步成功之前 leader 故障，那么将会丢失数据；
 
-![image-20210307102029613](D:\workspace\note\image\kafka数据丢失.png)
+![image-20210307102029613](\image\kafka数据丢失.png)
 
 - **-1**（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower 全部落盘成功后才 返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会 造成数据重复
 
