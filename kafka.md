@@ -161,7 +161,10 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 #### Log文件中的HW和LEO
 
 - LEO：指的是当前副本最大的 **offset + 1**； 
+
 - HW：指的是消费者能见到的最大的 **offset + 1**，ISR 队列中最小的 LEO。
+
+  其中follower是通过自身循环线程，去向leader拉取消息的，在拉取的过程中，会把本follower的LEO带给leader，从而昂leader更新HW。因为拉取是一直在的，这样处理可以减少响应的交互次数
 
 #### follower 故障 
 
