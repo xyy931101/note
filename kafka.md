@@ -214,7 +214,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		由于 consumer 在消费过程中可能会出现断电宕机等故障，consumer 恢复后，需要从故 障前的位置的继续消费，所以 consumer 需要实时记录自己消费到了哪个 offset，以便故障恢 复后继续消费。consumer在维护offset的过程中，是根据**groupId跟partition**来维护offset的，即这样可以一定程度的避免rebalance过程中，避免同一消息被重复消费。
 
-![image-20210307105459616](\image\kafka zookeeper节点.png)
+![image-20210307105459616](image\kafka zookeeper节点.png)
 
 ### Kafka 高效读写数据
 
@@ -224,7 +224,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 - **零复制技术**
 
-  ![image-20210307105739163](\image\kafka零拷贝.png)
+  ![image-20210307105739163](image\kafka零拷贝.png)
 
 
 
@@ -236,7 +236,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		以下为 partition 的 leader 选举过程：
 
-![image-20210307110326373](\image\kafka分区leader选举.png)
+![image-20210307110326373](image\kafka分区leader选举.png)
 
 ## Kafka 事务
 
@@ -273,7 +273,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 备 份机制是Kafka0.8版本的新特性，备份机制的出现大大提高了Kafka集群的可靠性、稳定性。有了备份机制后，Kafka允许集群中的节点挂掉后而 不影响整个集群工作。一个备份数量为n的集群允许n-1个节点失败。在所有备份节点中，有一个节点作为lead节点，这个节点保存了其它备份节点列表，并 维持各个备份间的状体同步。下面这幅图解释了Kafka的备份机制:
 
-![](D:\workspace\note\image\kafka备份机制.jpg)
+![](image\kafka备份机制.jpg)
 
 ## Kafka高效性相关设计
 
@@ -324,7 +324,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		Kafka 的 Producer 发送消息采用的是异步发送的方式。在消息发送的过程中，涉及到了 两个线程——main 线程和 Sender 线程，以及一个线程共享变量——RecordAccumulator。 main 线程将消息发送给 RecordAccumulator，Sender 线程不断从 RecordAccumulator 中拉取 消息发送到 Kafka broker。RecordAccumulator大小可以通过参数`buffer.memory`进行调整，默认大小为**32M**
 
-![image-20210307110628643](\image\kafka生产者API流程图.png)
+![image-20210307110628643](image\kafka生产者API流程图.png)
 
 ### 发送的三种方式
 

@@ -2,7 +2,7 @@
 
 ​	可以通过设置socket使其变为non-blocking。当对一个non-blocking socket执行读操作时，流程是这个样子
 
-![](\image\reactor\NIO工作模型.png)
+![](image\reactor\NIO工作模型.png)
 
 当用户进程发出read操作时，如果kernel中的数据还没有准备好，那么它并不会block用户进程，而是立刻返回一个error。从用户进程角度讲 ，它发起一个read操作后，并不需要等待，而是马上就得到了一个结果。用户进程判断结果是一个error时，它就知道数据还没有准备好，于是它可以再次发送read操作。一旦kernel中的数据准备好了，并且又再次收到了用户进程的system call，那么它马上就将数据拷贝到了用户内存，然后返回。
 
@@ -16,13 +16,13 @@
 
 2、然后应用进程调用select的时候把3个fd_set传给内核（这里也就产生了一次fd_set在用户空间到内核空间的复制），内核收到fd_set后对fd_set进行遍历，然后一个个去扫描对应fd是否满足可读写事件。
 
-![](\image\reactor\select工作模型.jpg)
+![](image\reactor\select工作模型.png)
 
 3、如果发现了有对应的fd有读写事件后，内核会把fd_set里没有事件状态的fd句柄清除，然后把有事件的fd返回给应用进程（这里又会把fd_set从内核空间复制用户空间）。
 
 4、最后应用进程收到了select返回的活跃事件类型的fd句柄后，再向对应的fd发起数据读取或者写入数据操作。
 
-![](\image\reactor\select工作流程2.jpg)
+![](image\reactor\select工作流程2.jpg)
 
 总的来说：select 提供一种可以用一个进程监控多个网络连接的方式，但也还遗留了一些问题，这些问题也是后来select面对高并发环境的性能瓶颈。
 
@@ -238,7 +238,7 @@ class MultiThreadHandler implements Runnable {
 
 ## 多Reactor多线程模型
 
-![](\reactor\多Reactor多线程模型.png)
+![](image\reactor\多Reactor多线程模型.png)
 
 第三种模型比起第二种模型，是将Reactor分成两部分，
 

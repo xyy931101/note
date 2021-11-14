@@ -77,7 +77,7 @@ null
 
 
 
-![image-20210118232801993](C:\Users\xiongyy\Desktop\技术资料\图片\image-20210118232801993.png)
+![image-20210118232801993](image\image-20210118232801993.png)
 
 
 

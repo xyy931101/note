@@ -46,7 +46,7 @@ jmap
 
 9. ```java
    查看前20大的对象
-   jmap -histo ${pid}|head 20
+   jmap -histo ${pid}|head -20
    ```
 
    可以查看占用空间的大对象
