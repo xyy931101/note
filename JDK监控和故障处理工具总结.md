@@ -57,7 +57,7 @@ jmap
 
 11. jstack -info ${pid}  查看当前启动参数
 
-12. jstack -gc ${pid} 500   每隔500毫秒输出GC信息
+12. jstat -gc ${pid} 500   每隔500毫秒输出GC信息
 
 
 
