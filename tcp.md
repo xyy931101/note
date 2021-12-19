@@ -411,3 +411,8 @@ Cookie 与 Session，一般认为是两个独立的东西，Session采用的是�
 
 1. 手动通过URL传值、隐藏表单传递Session ID。
 2. 用文件、数据库等形式保存Session ID，在跨页过程中手动调用。
+
+
+
+
+
