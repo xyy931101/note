@@ -393,7 +393,7 @@ synchronized优化的过程和markword息息相关
 
 1. Object o = new Object()
    锁 = 0 01 无锁态 
-注意：如果偏向锁打开，默认是匿名偏向状态
+   注意：如果偏向锁打开，默认是匿名偏向状态
    
 2. o.hashCode()
    001 + hashcode
@@ -620,7 +620,7 @@ public class T01_ThreadVisibility {
 * 另外，java编译器或者JIT编译器有可能会去除没用的字段，所以填充字段必须加上volatile
   
   ```java
-package com.mashibing.juc.c_028_FalseSharing;
+  package com.mashibing.juc.c_028_FalseSharing;
   
   public class T02_CacheLinePadding {
       private static class Padding {
@@ -848,3 +848,16 @@ inline void OrderAccess::fence() {
 
 # 既然CPU有缓存一致性协议（MESI），为什么JMM还需要volatile关键字？
 
+volatile和MESI差着好几层抽象，中间会经历java编译器，java虚拟机和JIT，操作系统，CPU核心。
+
+volatile在Java中的意图是保证变量的可见性。为了实现这个功能，必须保证1）编译器不能乱序优化；2）指令执行在CPU上要保证读写的fence。
+
+对于x86的体系结构，voltile变量的访问代码会被java编译器生成不乱序的，带有lock指令前缀的机器码。而lock的实现还要区分，这个数据在不在CPU核心的专有缓存中（一般是指L1/L2）。如果在，MESI才有用武之地。如果不满足就会要用其他手段。而这些手段是虚拟机开发者，以及操作系统开发者需要考虑的问题。简而言之，CPU里的缓存，buffer，queue有很多种。MESI只能在一种情况下解决核心专有Cache之间不一致的问题。
+
+此外，如果有些CPU不支持MESI协议，那么必须用其他办法来实现等价的效果，比如总是用锁总线的方式，或者明确的fence指令来保证volatile想达到的目标。
+
+如果CPU是单核心的，cache是专供这个核心的，MESI理论上也就没有用了。但是依然要考虑主存和Cache被多个线程切换访问时带来的不一致问题。
+
+总之，volatile是一个高层的表达意图的“抽象”，而MESI是为了实现这个抽象，在某种特定情况下需要使用的一个实现细节。
+
+你可以把JSR-133看作是一套UT的规范。不管底下CPU/编译器怎么折腾，只要voltile修饰的变量满足JSR-133所描述的所有场景，就算是一个好的java实现。而基于这个规范，java开发人员才能安心的开发并发代码，而不至于被底层细节搞疯。
