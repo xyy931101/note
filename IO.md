@@ -13,6 +13,7 @@
 
 
 
+
 # 网络IO
 
 ​	可以通过设置socket使其变为non-blocking。当对一个non-blocking socket执行读操作时，流程是这个样子
@@ -111,7 +112,7 @@
 
 ## 单Reactor单线程模型
 
-![](D:\workspace\note\image\reactor\reactor单线程.png)
+![](image\reactor\reactor单线程.png)
 
 ```java
 
@@ -187,7 +188,7 @@ Acceptor主要任务就是构建handler ，在获取到和client相关的SocketC
 
 ## 单Reactor多线程模型
 
-![](D:\workspace\note\image\reactor\单reactor多线程.png)
+![](image\reactor\单reactor多线程.png)
 
 相对于第一种单线程的模式来说，在处理业务逻辑，也就是获取到IO的读写事件之后，交由线程池来处理，这样可以减小主reactor的性能开销，从而更专注的做事件分发工作了，从而提升整个应用的吞吐。
 
