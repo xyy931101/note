@@ -246,7 +246,23 @@ HotSpot主要使用第二种方式，因为JAVA访问对象非常频繁，可以
 
 **其中：跨代引用是有新生代的记忆集（Remembered Set）来进行标识，Minor GC的时候，这部分也会被加入的GCRoots里面**
 
+### 内存分配与回收策略
 
+针对不同年龄段的对象分配原则如下
+
+- 优先分配到Eden
+
+- 大对象直接分配到老年代
+
+  尽量避免出现过多的大对象
+
+- 动态对象年龄判断
+
+  如果Survivor区中相同年龄的所有对象大小总和大于Survivor空间的一半，年龄大于或等于该年龄的对象可以直接进入老年代，无需等到MaxTenuringThreshold中年龄的要求
+
+- 空间分配担保：
+
+  - -XX:MaxTenuringThreshold
 
 ### 常见的垃圾回收器
 
@@ -383,24 +399,6 @@ HotSpot主要使用第二种方式，因为JAVA访问对象非常频繁，可以
 > - GCTimeRatio GC时间建议比例，G1会根据这个值调整堆空间
 > - ConcGCThreads 线程数量
 > - InitiatingHeapOccupancyPercent 启动G1的堆空间占用比例
-
-### 内存分配与回收策略
-
-针对不同年龄段的对象分配原则如下
-
-- 优先分配到Eden
-
-- 大对象直接分配到老年代
-
-  尽量避免出现过多的大对象
-
-- 动态对象年龄判断
-
-  如果Survivor区中相同年龄的所有对象大小总和大于Survivor空间的一半，年龄大于或等于该年龄的对象可以直接进入老年代，无需等到MaxTenuringThreshold中年龄的要求
-
-- 空间分配担保：
-
-  - -XX:MaxTenuringThreshold
 
 ------
 
