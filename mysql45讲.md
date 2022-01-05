@@ -223,3 +223,83 @@ innodb 拥有一个自增的全局事务 ID，每当一个事务开启，在事�
 ## 查询表锁
 
 `mysql> select * from t sys.innodb_lock_waits where locked_table='`test`.`t`'\G`
+
+
+
+# binlog 与redo log的写入机制
+
+## binlog 的写入机制
+
+其实，binlog 的写入逻辑比较简单：
+
+​	事务执行过程中，先把日志写到 binlog cache，事务提交的时候，再把 binlog cache 写到 binlog 文件中。一个事务的 binlog 是不能被拆开的，因此不论这个事务多大，也要确保一次性写入。这就涉及到了 binlog cache 的保存问题。系统给 binlog cache 分配了一片内存，每个线程一个，参数 binlog_cache_size 用于控制单个线程内 binlog cache 所占内存的大小。如果超过了这个参数规定的大小，就要暂存到磁盘。事务提交的时候，执行器把 binlog cache 里的完整事务写入到 binlog 中，并清空 binlog cache。如下图所示：
+
+![](image/mysql/binlog写入.webp)
+
+可以看到，每个线程有自己 binlog cache，但是共用同一份 binlog 文件。
+
+- 图中的 write，指的就是指把日志写入到文件系统的 page cache，并没有把数据持久化到磁盘，所以速度比较快。
+- 图中的 fsync，才是将数据持久化到磁盘的操作。一般情况下，我们认为 fsync 才占磁盘的 IOPS。
+
+write 和 fsync 的时机，是由参数 sync_binlog 控制的：
+
+1. sync_binlog=0 的时候，表示每次提交事务都只 write，不 fsync；
+2. sync_binlog=1 的时候，表示每次提交事务都会执行 fsync；
+3. sync_binlog=N(N>1) 的时候，表示每次提交事务都 write，但累积 N 个事务后才 fsync。
+
+## redo log 的写入机制
+
+
+
+![](image/mysql/MySQL redo log 存储状态.webp)
+
+这三种状态分别是：
+
+1. 存在 redo log buffer 中，物理上是在 MySQL 进程内存中，就是图中的红色部分；
+2. 写到磁盘 (write)，但是没有持久化（fsync)，物理上是在文件系统的 page cache 里面，也就是图中的黄色部分；
+3. 持久化到磁盘，对应的是 hard disk，也就是图中的绿色部分。
+
+为了控制 redo log 的写入策略，InnoDB 提供了 innodb_flush_log_at_trx_commit 参数，它有三种可能取值：
+
+1. 设置为 0 的时候，表示每次事务提交时都只是把 redo log 留在 redo log buffer 中 ;
+2. 设置为 1 的时候，表示每次事务提交时都将 redo log 直接持久化到磁盘；
+3. 设置为 2 的时候，表示每次事务提交时都只是把 redo log 写到 page cache。
+
+除了后台线程每秒一次的轮询操作外，还有两种场景会让一个没有提交的事务的 redo log 写入到磁盘中。
+
+- 一种是，redo log buffer 占用的空间即将达到 innodb_log_buffer_size 一半的时候，后台线程会主动写盘。注意，由于这个事务并没有提交，所以这个写盘动作只是 write，而没有调用 fsync，也就是只留在了文件系统的 page cache。
+- 另一种是，并行的事务提交的时候，顺带将这个事务的 redo log buffer 持久化到磁盘。假设一个事务 A 执行到一半，已经写了一些 redo log 到 buffer 中，这时候有另外一个线程的事务 B 提交，如果 innodb_flush_log_at_trx_commit 设置的是 1，那么按照这个参数的逻辑，事务 B 要把 redo log buffer 里的日志全部持久化到磁盘。这时候，就会带上事务 A 在 redo log buffer 里的日志一起持久化到磁盘。
+
+## WAL
+
+WAL(Write Ahead Log)预写日志，是数据库系统中常见的一种手段，用于保证数据操作的原子性和持久性。
+
+### **WAL 的优点**
+
+1. 读和写可以完全地并发执行，不会互相阻塞（但是写之间仍然不能并发）。
+2. WAL 在大多数情况下，拥有更好的性能（因为无需每次写入时都要写两个文件）。
+3. 磁盘 I/O 行为更容易被预测。
+4. 使用更少的 fsync()操作，减少系统脆弱的问题。
+
+WAL在mysql中的应用
+
+- redo log 和 binlog 都是顺序写，磁盘的顺序写比随机写速度要快；
+- 组提交机制，可以大幅度降低磁盘的 IOPS 消耗。
+
+**如果你的 MySQL 现在出现了性能瓶颈，而且瓶颈在 IO 上，可以通过以下方法来提升性能呢**：
+
+1. 设置 binlog_group_commit_sync_delay 和 binlog_group_commit_sync_no_delay_count 参数，减少 binlog 的写盘次数。这个方法是基于“额外的故意等待”来实现的，因此可能会增加语句的响应时间，但没有丢失数据的风险。
+2. 将 sync_binlog 设置为大于 1 的值（比较常见是 100~1000）。这样做的风险是，主机掉电时会丢 binlog 日志。
+3. 将 innodb_flush_log_at_trx_commit 设置为 2。这样做的风险是，主机掉电的时候会丢数据。
+
+
+
+# mySQL主备同步
+
+备库 B 跟主库 A 之间维持了一个长连接。主库 A 内部有一个线程，专门用于服务备库 B 的这个长连接。一个事务日志同步的完整过程是这样的：
+
+1. 在备库 B 上通过 change master 命令，设置主库 A 的 IP、端口、用户名、密码，以及要从哪个位置开始请求 binlog，这个位置包含文件名和日志偏移量。
+2. 在备库 B 上执行 start slave 命令，这时候备库会启动两个线程，就是图中的 io_thread 和 sql_thread。
+3. 其中 io_thread 负责与主库建立连接。主库 A 校验完用户名、密码后，开始按照备库 B 传过来的位置，从本地读取 binlog，发给 B。
+4. 备库 B 拿到 binlog 后，写到本地文件，称为中转日志（relay log）。
+5. sql_thread 读取中转日志，解析出日志里的命令，并执行。
