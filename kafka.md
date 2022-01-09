@@ -1,6 +1,6 @@
 # 简介
 
-![](\image\kafka拓扑图.png)
+![](image\kafka拓扑图.png)
 
 1. **Producer** ：消息生产者，就是向kafka broker 发消息的客户端；
 2. **Consumer** ：消息消费者，向kafka broker 取消息的客户端；
@@ -51,7 +51,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 #### 生产者客户端整体架构
 
-![](\image\Kafka生产者客户端整体架构.png)
+![](image\Kafka生产者客户端整体架构.png)
 
 ​		整个生产者客户端主要有两个线程，主线程以及Sender线程。Producer在主线程中产生消息，然后通过拦截器，序列化器，分区器之后缓存到消息累加器RecordAccumulator中。Sender线程从RecordAccumulator中获取消息并发送到kafka中
 
@@ -74,7 +74,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 ​		也称 Round-robin 策略，即顺序分配。比如一个主题下有 3 个分区，那么第一条消息被发送到分区 0，第二条被发送到分区 1，第三条被发送到分区 2，以此类推。当生产第 4 条消息时又会重新开始，即将其分配到分区 0，就像下面这张图展示的那样。
 
-![](\image\kafaka轮询策略.png)
+![](image\kafaka轮询策略.png)
 
 ​		这就是所谓的轮询策略。轮询策略是 Kafka Java 生产者 API 默认提供的分区策略。如果你未指定`partitioner.class`参数，那么你的生产者程序会按照轮询的方式在主题的所有分区间均匀地“码放”消息。
 
@@ -84,7 +84,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 也称 Randomness 策略。所谓随机就是我们随意地将消息放置到任意一个分区上，如下面这张图所示。
 
-![](\image\kafka随机策略.png)
+![](image\kafka随机策略.png)
 
 如果要实现随机策略版的 partition 方法，很简单，只需要两行代码即可：
 
@@ -123,7 +123,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
    **为保证 producer 发送的数据，能可靠的发送到指定的 topic，topic 的每个 partition 收到 producer 发送的数据后，都需要向 producer 发送 ack（acknowledgement 确认收到），如果 producer 收到 ack，就会进行下一轮的发送，否则重新发送数据。**
 
-   ![image-20210306202400438](\image\kafka生产者消息发送.png)
+   ![image-20210306202400438](image\kafka生产者消息发送.png)
 
 #### 副本数据同步策略
 
@@ -148,11 +148,11 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 - **0**：producer 不等待 broker 的 ack，这一操作提供了一个最低的延迟，broker 一接收到还 没有写入磁盘就已经返回，当 broker 故障时有可能丢失数据； 
 - **1**：producer 等待 broker 的 ack，partition 的 leader 落盘成功后返回 ack，如果在 follower 同步成功之前 leader 故障，那么将会丢失数据；
 
-![image-20210307102029613](\image\kafka数据丢失.png)
+![image-20210307102029613](image\kafka数据丢失.png)
 
 - **-1**（all）：producer 等待 broker 的 ack，partition 的 leader 和 follower 全部落盘成功后才 返回 ack。但是如果在 follower 同步完成后，broker 发送 ack 之前，leader 发生故障，那么会 造成数据重复
 
-![](\image\kafaka ack生产者数据重复.png)
+![](image\kafaka ack生产者数据重复.png)
 
 
 
@@ -249,7 +249,15 @@ Broker 端在缓存中保存了这 Sequence Numbler，对于接收的每条消�
    1. commotSync()，其中无参方法是提交本次拉取的最新位移进行提交的
    2. commitAsync()，有3个重载函数。
 
+### 关于consumer的offset的维护
 
+​	旧版的是维护在ZK当中的，新版的是维护在_consumer_offset的内部主题中进行持久化。消费者在消费完消息之后，需要执行消费者位移的提交。
+
+lastComsumedOffset: 当前消费到的位置
+
+position:下一次拉取消息的位置
+
+committedOffset:已经提交的消费位移
 
 ### Kafka 高效读写数据
 
