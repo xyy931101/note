@@ -271,7 +271,9 @@ committedOffset:已经提交的消费位移
 
 
 
-# Zookeeper 在 Kafka 中的作用
+# KAFKA 客户端
+
+## Zookeeper 在 Kafka 中的作用
 
 ​		Kafka 集群中有一个 broker 会被选举为 Controller，负责管理集群 broker 的上下线，所 有 topic 的分区副本分配和 leader 选举等工作。
 
@@ -281,9 +283,27 @@ committedOffset:已经提交的消费位移
 
 ![image-20210307110326373](image\kafka分区leader选举.png)
 
-# Kafka选举机制
+## Kafka的分区有序性
 
-## 控制器（Broker）选举
+1. kafka的顺序消息仅仅是通过partitionKey，将某类消息写入同一个partition，同一个partition是在同一个broker上面的
+
+2. 在kafka的server端，在selector.select 的mute  与unmute  来控制客户端与server的io的读取，控制secket的chanel的read事件
+
+   ```scala
+   processCompletedReceives()   -> selector.mute(connectionId); //读取事件后mute
+   
+   processCompletedSends（）    -> tryUnmuteChannel(send.destinationId)  //处理完send之后,unmute
+   ```
+
+   
+
+3. 除了发送消息需要指定partitionKey外，producer和consumer实例化无区别。
+
+4. kafka broker宕机，kafka会有自选择，所以宕机不会减少partition数量，也就不会影响partitionKey的sharding
+
+## Kafka选举机制
+
+### 控制器（Broker）选举
 
 ​		所谓控制器就是一个Borker，在一个kafka集群中，有多个broker节点，但是它们之间需要选举出一个leader，其他的broker充当follower角色。集群中第一个启动的broker会通过在zookeeper中创建临时节点/controller来让自己成为控制器，其他broker启动时也会在zookeeper中创建临时节点，但是发现节点已经存在，所以它们会收到一个异常，意识到控制器已经存在，那么就会在zookeeper中创建watch对象，便于它们收到控制器变更的通知。
 
@@ -295,7 +315,7 @@ committedOffset:已经提交的消费位移
 
 集群中每选举一次控制器，就会通过zookeeper创建一个controller epoch，每一个选举都会创建一个更大，包含最新信息的epoch，如果有broker收到比这个epoch旧的数据，就会忽略它们，kafka也通过这个epoch来防止集群产生“脑裂”。
 
-## 分区副本选举机制
+### 分区副本选举机制
 
 在kafka的集群中，会存在着多个主题topic，在每一个topic中，又被划分为多个partition，为了防止数据不丢失，每一个partition又有多个副本，在整个集群中，总共有三种副本角色：
 
@@ -397,24 +417,6 @@ follower需要从leader中同步数据，但是由于网络或者其他原因，
 
 这种操作方式明显是非常低效的，这里有四次拷贝，两次系统调用。如果使用sendfile，就可以避免两次拷贝：操作系统将数据直接从页缓存发送到网络上。所以在这个优化的路径中，只有最后一步将数据拷贝到网卡缓存中是需要的。
 我 们期望一个主题上有多个消费者是一种常见的应用场景。利用上述的zero-copy，数据只被拷贝到页缓存一次，然后就可以在每次消费时被重得利用，而不 需要将数据存在内存中，然后在每次读的时候拷贝到内核空间中。这使得消息消费速度可以达到网络连接的速度。这样以来，通过页面缓存和sendfile的结 合使用，整个kafka集群几乎都已以缓存的方式提供服务，而且即使下游的consumer很多，也不会对整个集群服务造成压力。
-
-# Kfaka的分区有序性
-
-1. kafka的顺序消息仅仅是通过partitionKey，将某类消息写入同一个partition，同一个partition是在同一个broker上面的
-
-2. 在kafka的server端，在selector.select 的mute  与unmute  来控制客户端与server的io的读取，控制secket的chanel的read事件
-
-   ```scala
-   processCompletedReceives()   -> selector.mute(connectionId); //读取事件后mute
-   
-   processCompletedSends（）    -> tryUnmuteChannel(send.destinationId)  //处理完send之后,unmute
-   ```
-
-   
-
-3. 除了发送消息需要指定partitionKey外，producer和consumer实例化无区别。
-
-4. kafka broker宕机，kafka会有自选择，所以宕机不会减少partition数量，也就不会影响partitionKey的sharding
 
 # Producer API 消息发送流程
 
