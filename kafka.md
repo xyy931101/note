@@ -400,11 +400,10 @@ follower需要从leader中同步数据，但是由于网络或者其他原因，
 
 # Kfaka的分区有序性
 
-①、kafka的顺序消息仅仅是通过partitionKey，将某类消息写入同一个partition，一个partition只能对应一个消费线程，以保证数据有序。
-
-②、除了发送消息需要指定partitionKey外，producer和consumer实例化无区别。
-
-③、kafka broker宕机，kafka会有自选择，所以宕机不会减少partition数量，也就不会影响partitionKey的sharding
+1. kafka的顺序消息仅仅是通过partitionKey，将某类消息写入同一个partition，同一个partition是在同一个broker上面的
+2. 在kafka的server端，在selector.select 的mutx  与unmutx  来控制客户端与server的io的读取
+3. 除了发送消息需要指定partitionKey外，producer和consumer实例化无区别。
+4. kafka broker宕机，kafka会有自选择，所以宕机不会减少partition数量，也就不会影响partitionKey的sharding
 
 # Producer API 消息发送流程
 
