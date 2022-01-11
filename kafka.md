@@ -158,14 +158,6 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ### 故障处理细节 
 
-#### Log文件中的HW和LEO
-
-- LEO(Log End Offest)：指的是当前副本最大的 **offset + 1**； 
-
-- HW(High Watermark)：指的是消费者能见到的最大的 **offset + 1**，ISR 队列中最小的 LEO。
-
-  其中follower是通过自身循环线程，去向leader拉取消息的，在拉取的过程中，会把本follower的LEO带给leader，从而让leader更新HW。因为拉取是一直在的，这样处理可以减少响应的交互次数
-
 #### follower 故障 
 
 ​		follower 发生故障后会被临时踢出 ISR，待该 follower 恢复后，follower 会读取本地磁盘 记录的上次的 HW，并将 log 文件高于 HW 的部分截取掉，从 HW 开始向 leader 进行同步。 等该 follower 的 LEO 大于等于该 Partition 的 HW，即 follower 追上 leader 之后，就可以重 新加入 ISR 了。
@@ -271,7 +263,7 @@ committedOffset:已经提交的消费位移
 
 
 
-# KAFKA 客户端
+# KAFKA 客户端(broker)
 
 ## Zookeeper 在 Kafka 中的作用
 
@@ -295,11 +287,25 @@ committedOffset:已经提交的消费位移
    processCompletedSends（）    -> tryUnmuteChannel(send.destinationId)  //处理完send之后,unmute
    ```
 
-   
-
 3. 除了发送消息需要指定partitionKey外，producer和consumer实例化无区别。
 
 4. kafka broker宕机，kafka会有自选择，所以宕机不会减少partition数量，也就不会影响partitionKey的sharding
+
+## Partition中的HW和LEO
+
+- LEO(Log End Offest)：指的是当前副本最大的 **offset + 1**； 
+
+- HW(High Watermark)：指的是消费者能见到的最大的 **offset + 1**，ISR 队列中最小的 LEO。
+
+  其中follower是通过自身循环线程，去向leader拉取消息的，在拉取的过程中，会把本follower的LEO带给leader，从而让leader更新HW。因为拉取是一直在的，这样处理可以减少响应的交互次数。其中如果leader中的LEO跟follwer的LEO相等的话,会有一个delay
+
+## Kfaka的Segment的形成因素(LogSegment)
+
+1. segment文件创建时间是否大于配置的日志清除时间
+2. 当前消息 + segment已有大小 > 配置文件segment文件大小
+3. offsetIndex.isFull    10MB
+4. timeIndex.isFull      10MB
+5. !canConvertToRelativeOffset(rollParams.maxOffsetInMessages)    
 
 ## Kafka选举机制
 
