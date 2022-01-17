@@ -1,4 +1,4 @@
-# 简介
+# 	简介
 
 ![](image\kafka拓扑图.png)
 
@@ -30,7 +30,7 @@ Kafka 中消息是以 topic 进行分类的，生产者生产消息，消费者�
 
 ![image-20210306201205744](.\image\kafka文件存储机制.png)
 
-由于生产者生产的消息会不断追加到 log 文件末尾，为防止 log 文件过大导致数据定位 效率低下，Kafka 采取了分片和索引机制，将每个 partition 分为多个 segment。每个 segment 对应两个文件——“.index”文件和“.log”文件。这些文件位于一个文件夹下，该文件夹的命名 规则为：topic 名称+分区序号。例如，first 这个 topic 有三个分区，则其对应的文件夹为 first0,first-1,first-2。
+由于生产者生产的消息会不断追加到 log 文件末尾，为防止 log 文件过大导致数据定位 效率低下，Kafka 采取了分片和索引机制，将每个 partition 分为多个 segment。每个 segment 对应三个文件——2个“.index”文件和“.log”文件。这些文件位于一个文件夹下，该文件夹的命名 规则为：topic 名称+分区序号。例如，first 这个 topic 有三个分区，则其对应的文件夹为 first0,first-1,first-2。
 
 ```dockerfile
 00000000000000000000.index
@@ -194,6 +194,14 @@ Broker 端在缓存中保存了这 Sequence Numbler，对于接收的每条消�
 
 但是，这种只能保证单个 Producer 对于单会话单 Partition 的 Exactly Once 语义。不能保证同一个 Producer 一个 topic 不同的 Partition 幂等
 
+### producer 的写入流程
+
+1. producer 先从 zookeeper 的 "/brokers/.../state" 节点找到该 partition 的 leader 
+2. producer 将消息发送给该 leader 
+3. leader 将消息写入本地 log 
+4. followers 从 leader pull 消息，写入本地 log 后 leader 发送 ACK 
+5. leader 收到所有 ISR 中的 replica 的 ACK 后，增加 HW（high watermark，最后 commit 的 offset） 并向 producer 发送 ACK
+
 
 # Kafka 消费者
 
@@ -208,8 +216,6 @@ Broker 端在缓存中保存了这 Sequence Numbler，对于接收的每条消�
 #### 分区分配策略
 
 ​		一个 consumer group 中有多个 consumer，一个 topic 有多个 partition，所以必然会涉及 到 partition 的分配问题，即确定那个 partition 由哪个 consumer 来消费。
-
-​		Kafka 有两种分配策略，一是 RoundRobin，一是 Range。
 
 - **RoundRobin**   按照消费者总数与分区总数进行整除运算来获得一个跨度，然后根据跨度进行分配，尽可能均匀的分配给所有消费者若出现不够平均分配，则字典序靠前的会多分配一个去
 
@@ -311,30 +317,27 @@ committedOffset:已经提交的消费位移
 
 ### 控制器（Controller）选举
 
-​		所谓控制器就是一个Borker，在一个kafka集群中，有多个broker节点，但是它们之间需要选举出一个leader，其他的broker充当follower角色。broker启动的时候会先去获取controller节点信息,如果不存在,会通过在zookeeper中创建临时节点/controller来让自己成为控制器，第一个创建成功的会成为controller。其他broker启动时也会在zookeeper中创建临时节点，但是发现节点已经存在，所以它们会收到一个异常，意识到控制器已经存在，那么就会在zookeeper中创建watch对象，便于它们收到控制器变更的通知。
-
-那么如果控制器由于网络原因与zookeeper断开连接或者异常退出，那么其他broker通过watch收到控制器变更的通知，就会去尝试创建临时节点/controller，如果有一个broker创建成功，那么其他broker就会收到创建异常通知，也就意味着集群中已经有了控制器，其他broker只需创建watch对象即可。
-
-​		如果集群中有一个broker发生异常退出了，那么控制器就会检查这个broker是否有分区的副本leader，如果有那么这个分区就需要一个新的leader，此时控制器就会去遍历其他副本，决定哪一个成为新的leader，同时更新分区的ISR集合。
-
-如果有一个broker加入集群中，那么控制器就会通过Broker ID去判断新加入的broker中是否含有现有分区的副本，如果有，就会从分区副本中去同步数据。
-
-集群中每选举一次控制器，就会通过zookeeper创建一个controller epoch，每一个选举都会创建一个更大，包含最新信息的epoch，如果有broker收到比这个epoch旧的数据，就会忽略它们，kafka也通过这个epoch来防止集群产生“脑裂”。
+> ​		当broker启动的时候，都会创建KafkaController对象，但是集群中只能有一个leader对外提供服务，这些每个节点上的KafkaController会在指定的zookeeper路径下创建临时节点，只有第一个成功创建的节点的KafkaController才可以成为leader，其余的都是follower。当leader故障后，所有的follower会收到通知，再次竞争在该路径下创建节点从而选举新的leader
+>
+> ​	如果有一个broker加入集群中，那么控制器就会通过Broker ID去判断新加入的broker中是否含有现有分区的副本，如果有，就会从分区副本中去同步数据。
+>
+> ​		所谓控制器就是一个Borker，在一个kafka集群中，有多个broker节点，但是它们之间需要选举出一个leader，其他的broker充当follower角色。broker启动的时候会先去获取controller节点信息,如果不存在,会通过在zookeeper中创建临时节点/controller来让自己成为控制器，第一个创建成功的会成为controller。其他broker启动时也会在zookeeper中创建临时节点，但是发现节点已经存在，所以它们会收到一个异常，意识到控制器已经存在，那么就会在zookeeper中创建watch对象，便于它们收到控制器变更的通知。
 
 ### 分区副本（partition）
 
-在kafka的集群中，会存在着多个主题topic，在每一个topic中，又被划分为多个partition，为了防止数据不丢失，每一个partition又有多个副本，在整个集群中，总共有三种副本角色：
+ 由controller leader执行
 
-**首领副本**（leader）：也就是leader主副本，每个分区都有一个首领副本，为了保证数据一致性，所有的生产者与消费者的请求都会经过该副本来处理。
-**跟随者副本**（follower）：除了首领副本外的其他所有副本都是跟随者副本，跟随者副本不处理来自客户端的任何请求，只负责从首领副本同步数据，保证与首领保持一致。如果首领副本发生崩溃，就会从这其中选举出一个leader。
-**首选首领副本**：创建分区时指定的首选首领。如果不指定，则为分区的第一个副本。
-follower需要从leader中同步数据，但是由于网络或者其他原因，导致数据阻塞，出现不一致的情况，为了避免这种情况，follower会向leader发送请求信息，这些请求信息中包含了follower需要数据的偏移量offset，而且这些offset是有序的。
+- 从Zookeeper中读取当前分区的所有ISR(in-sync replicas)集合
+- 调用配置的分区选择算法选择分区的leader
 
-如果有follower向leader发送了请求1，接着发送请求2，请求3，那么再发送请求4，这时就意味着follower已经同步了前三条数据，否则不会发送请求4。leader通过跟踪 每一个follower的offset来判断它们的复制进度。
-
-默认的，如果follower与leader之间超过10s内没有发送请求，或者说没有收到请求数据，此时该follower就会被认为“不同步副本”。而持续请求的副本就是“同步副本”，当leader发生故障时，只有“同步副本”才可以被选举为leader。其中的请求超时时间可以通过参数replica.lag.time.max.ms参数来配置。
-
-我们希望每个分区的leader可以分布到不同的broker中，尽可能的达到负载均衡，所以会有一个首选首领，如果我们设置参数auto.leader.rebalance.enable为true，那么它会检查首选首领是否是真正的首领，如果不是，则会触发选举，让首选首领成为首领。
+> 如何处理所有Replica都不工作？
+>
+> 在ISR中至少有一个follower时，Kafka可以确保已经commit的数据不丢失，但如果某个Partition的所有Replica都宕机了，就无法保证数据不丢失了。这种情况下有两种可行的方案：
+>
+> 1. 等待ISR中的任一个Replica“活”过来，并且选它作为Leader
+> 2. 选择第一个“活”过来的Replica（不一定是ISR中的）作为Leader
+>
+>   这就需要在可用性和一致性当中作出一个简单的折衷。如果一定要等待ISR中的Replica“活”过来，那不可用的时间就可能会相对较长。而且如果ISR中的所有Replica都无法“活”过来了，或者数据都丢失了，这个Partition将永远不可用。选择第一个“活”过来的Replica作为Leader，而这个Replica不是ISR中的Replica，那即使它并不保证已经包含了所有已commit的消息，它也会成为Leader而作为consumer的数据源（前文有说明，所有读写都由Leader完成）。Kafka0.8.*使用了第二种方式。根据Kafka的文档，在以后的版本中，Kafka支持用户通过配置选择这两种方式中的一种，从而根据不同的使用场景选择高可用性还是强一致性。 unclean.leader.election.enable 参数决定使用哪种方案，默认是true，采用第二种方案
 
 ### 消费组选主
 
