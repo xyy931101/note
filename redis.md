@@ -130,7 +130,7 @@ typedef struct dictEntry {//hash节点
 
 1. 服务器目前没有执行BGSAVE或者BGREWRITEAOF命令，并且哈希表的负载因子大于1
 2. 服务器目前正在进行BGSAVE或BGREWRITEAOF命令，并且哈希表的负载因子大于5
-3. 当负载因子小于0.1时，会对哈希表进行收缩操作
+3. 当负载因子小于**0.1**时，会对哈希表进行收缩操作
 
 ### Ziplist(压缩列表)
 
@@ -607,7 +607,7 @@ Redis基于Reactor模式开发了网络事件处理器，这个处理器被称�
 
 ![redis主从过程](image\redis\redis主从过程.jpg)
 
-增量复制时，主从库之间具体是怎么保持同步的呢？这里的奥妙就在于 repl_backlog_buffer (默认大小为1MB)这个缓冲区。我们先来看下它是如何用于增量命令的同步的。当主从库断连后，主库会把断连期间收到的写操作命令，写入 replication buffer，同时也会把这些操作命令也写入 repl_backlog_buffer 这个缓冲区。repl_backlog_buffer 是一个环形缓冲区(**FIFO**)，主库会记录自己写到的位置，从库则会记录自己已经读到的位置。
+增量复制时，主从库之间具体是怎么保持同步的呢？这里的奥妙就在于 repl_backlog_buffer (默认大小为1MB)这个缓冲区。我们先来看下它是如何用于增量命令的同步的。当主从库断连后，主库会把断连期间收到的写操作命令，写入 replication buffer，同时也会把这些操作命令也写入 repl_backlog_buffer 这个缓冲区。repl_backlog_buffer 是一个环形缓冲区(**FIFO**)，主库会记录自己写到的位置，从库则会记录自己已经读到的位置。当从节点的内容已经不在环形缓冲区内了，则会触发BGSAVE
 
 ![redis主从增量复制](image\redis\redis主从增量复制.jpg)
 

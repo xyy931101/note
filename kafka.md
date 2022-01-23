@@ -168,7 +168,19 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 **注意：这只能保证副本之间的数据一致性，并不能保证数据不丢失或者不重复。**
 
-#### Exactly Once 语义
+### 消息传输级别
+
+#### At Most Once 
+
+至多一次。消息有可能丢失，但是绝不会重复传输
+
+#### At Least Once
+
+至少传输一次。消息绝不会丢失，但是有可能会重复传输
+
+#### Exactly Once
+
+恰好一次，每条消息肯定会被传输一次，且只传输一次。
 
 ​		将服务器的 ACK 级别设置为-1，可以保证 Producer 到 Server 之间不会丢失数据，即 At Least Once 语义。相对的，将服务器 ACK 级别设置为 0，可以保证生产者每条消息只会被 发送一次，即 At Most Once 语义。
 
@@ -176,7 +188,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​										**At Least Once + 幂等性 = Exactly Once**
 
-​		要启用幂等性，只需要将 Producer 的参数中 enable.idompotence 设置为 true 即可。Kafka 的幂等性实现其实就是将原来下游需要做的去重放在了数据上游。开启幂等性的 Producer 在 初始化的时候会被分配一个 PID，发往同一 Partition 的消息会附带 Sequence Number。而 Broker 端会对做缓存，当具有相同主键的消息提交时，Broker 只 会持久化一条。
+​		要启用幂等性，只需要将 Producer 的参数中 **enable.idompotence** 设置为 true 即可。Kafka 的幂等性实现其实就是将原来下游需要做的去重放在了数据上游。开启幂等性的 Producer 在 初始化的时候会被分配一个 PID，发往同一 Partition 的消息会附带 Sequence Number。而 Broker 端会对做缓存，当具有相同主键的消息提交时，Broker 只 会持久化一条。
 
 ​		但是 PID 重启就会变化，同时不同的 Partition 也具有不同主键，所以幂等性无法保证跨 分区跨会话的 Exactly Once。
 
@@ -215,7 +227,7 @@ Broker 端在缓存中保存了这 Sequence Numbler，对于接收的每条消�
 
 #### 分区分配策略
 
-​		一个 consumer group 中有多个 consumer，一个 topic 有多个 partition，所以必然会涉及 到 partition 的分配问题，即确定那个 partition 由哪个 consumer 来消费。
+​		一个 consumer group 中有多个 consumer，一个 topic 有多个 partition，所以必然会涉及 到 partition 的分配问题，即确定那个 partition 由哪个 consumer 来消费。在Kafka中会由coordinator进行协调进行管理
 
 - **RoundRobin**   按照消费者总数与分区总数进行整除运算来获得一个跨度，然后根据跨度进行分配，尽可能均匀的分配给所有消费者若出现不够平均分配，则字典序靠前的会多分配一个去
 
@@ -232,14 +244,6 @@ Broker 端在缓存中保存了这 Sequence Numbler，对于接收的每条消�
 
 - **StickAssignor**   保留上一次分区分配结果   (最优解)
 
-#### offset 的维护
-
-​		由于 consumer 在消费过程中可能会出现断电宕机等故障，consumer 恢复后，需要从故 障前的位置的继续消费，所以 consumer 需要实时记录自己消费到了哪个 offset，以便故障恢 复后继续消费。consumer在维护offset的过程中，是根据**groupId跟partition**来维护offset的，即这样可以一定程度的避免rebalance过程中，避免同一消息被重复消费。
-
-![image-20210307105459616](image\kafka zookeeper节点.png)
-
-
-
 ### consumer的位移提交（enable.auto.commit）
 
 1. 自动提交：消费者每隔5秒会将每隔分区钟拉取到的最大的消息位移进行提交。自动提交的动作是在poll的逻辑里面完成的，每次发起拉取请求之前都是先检查一遍是否可以进行位移提交，如果可以，就会提交上一次轮询的位移。
@@ -249,25 +253,13 @@ Broker 端在缓存中保存了这 Sequence Numbler，对于接收的每条消�
 
 ### 关于consumer的offset的维护
 
-​	旧版的是维护在ZK当中的，新版的是维护在_consumer_offset的内部主题中进行持久化。消费者在消费完消息之后，需要执行消费者位移的提交。
+​	旧版的是维护在ZK当中的，新版的是维护在_consumer_offset的内部主题中进行持久化。消费者在消费完消息之后，需要执行消费者位移的提交。由于 consumer 在消费过程中可能会出现断电宕机等故障，consumer 恢复后，需要从故 障前的位置的继续消费，所以 consumer 需要实时记录自己消费到了哪个 offset，以便故障恢 复后继续消费。consumer在维护offset的过程中，是根据**groupId跟partition**来维护offset的，即这样可以一定程度的避免rebalance过程中，避免同一消息被重复消费。
 
 lastComsumedOffset: 当前消费到的位置
 
 position:下一次拉取消息的位置
 
 committedOffset:已经提交的消费位移
-
-### Kafka 高效读写数据
-
-- **顺序写磁盘**
-
-  ​	Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是一直追加到文件末端， 为顺序写。官网有数据表明，同样的磁盘，顺序写能到 600M/s，而随机写只有 100K/s。这 与磁盘的机械机构有关，顺序写之所以快，是因为其省去了大量磁头寻址的时间。
-
-- **零复制技术**
-
-  ![image-20210307105739163](image\kafka零拷贝.png)
-
-
 
 # KAFKA 客户端(broker)
 
@@ -345,17 +337,36 @@ committedOffset:已经提交的消费位移
 
 如果消费组内还没有leader，那么第一个加入消费组的消费者即为消费组的leader，如果某一个时刻leader消费者由于某些原因退出了消费组，那么就会重新选举leader，member是一个hashmap的数据结构，key为消费者的`member_id`，value是元数据信息，那么它会将leaderId选举为Hashmap中的第一个键值对，它和随机基本没啥区别
 
+## Kafka 高效读写数据
+
+- **顺序写磁盘**
+
+  ​	Kafka 的 producer 生产数据，要写入到 log 文件中，写的过程是一直追加到文件末端， 为顺序写。官网有数据表明，同样的磁盘，顺序写能到 600M/s，而随机写只有 100K/s。这 与磁盘的机械机构有关，顺序写之所以快，是因为其省去了大量磁头寻址的时间。
+
+- **零复制技术**
+
+  ![image-20210307105739163](image\kafka零拷贝.png)
+
 ------
 
-# Kafka 事务
+## Kafka为什么不支持读写分离
+
+### 读写分离的缺点	
+
+- 数据一致性问题。数据从主节点到从节点，必然会存在一定的时间延时的时间窗口，这个时间窗口会导致主从节点之间的数据不一致的问题
+- 延时问题。
+
+读写分离主要是为了均摊负载，而Kafka本身的分区的设计就能很好的进行负载均衡，leader可以很好的分配到不同的broker中。
+
+## Kafka 事务
 
 ​		Kafka 从 0.11 版本开始引入了事务支持。事务可以保证 Kafka 在 Exactly Once 语义的基 础上，生产和消费可以跨分区和会话，要么全部成功，要么全部失败。
 
 ### Producer 事务
 
-​		为了实现跨分区跨会话的事务，需要引入一个全局唯一的 Transaction ID，并将 Producer 获得的PID 和Transaction ID 绑定。这样当Producer 重启后就可以通过正在进行的 Transaction ID 获得原来的 PID。
+​		为了实现跨分区跨会话的事务，需要引入一个全局唯一的 Transaction ID，并将 Producer 获得的PID 和Transaction ID 绑定。这样当Producer 重启后就可以通过正在进行的 Transaction ID 获得原来的 PID。Transaction ID与PID一一对应，不同的是，Transaction ID是由用户显式指定，而PID是由KAFKA内部进行分配的。
 
-​		为了管理 Transaction，Kafka 引入了一个新的组件 Transaction Coordinator。Producer 就 是通过和 Transaction Coordinator 交互获得 Transaction ID 对应的任务状态。Transaction Coordinator 还负责将事务所有写入 Kafka 的一个内部 Topic，这样即使整个服务重启，由于 事务状态得到保存，进行中的事务状态可以得到恢复，从而继续进行。
+​		为了管理 Transaction，Kafka 引入了一个新的组件 Transaction Coordinator。Producer 就 是通过和 Transaction Coordinator 交互获得同一个Transaction ID 下的**epoch** 对应的任务状态。Transaction Coordinator 还负责将事务所有写入 Kafka 的一个内部 Topic，这样即使整个服务重启，由于 事务状态得到保存，进行中的事务状态可以得到恢复，从而继续进行。
 
 ### Consumer 事务
 
@@ -426,16 +437,4 @@ committedOffset:已经提交的消费位移
 
 这种操作方式明显是非常低效的，这里有四次拷贝，两次系统调用。如果使用sendfile，就可以避免两次拷贝：操作系统将数据直接从页缓存发送到网络上。所以在这个优化的路径中，只有最后一步将数据拷贝到网卡缓存中是需要的。
 我 们期望一个主题上有多个消费者是一种常见的应用场景。利用上述的zero-copy，数据只被拷贝到页缓存一次，然后就可以在每次消费时被重得利用，而不 需要将数据存在内存中，然后在每次读的时候拷贝到内核空间中。这使得消息消费速度可以达到网络连接的速度。这样以来，通过页面缓存和sendfile的结 合使用，整个kafka集群几乎都已以缓存的方式提供服务，而且即使下游的consumer很多，也不会对整个集群服务造成压力。
-
-# Producer API 消息发送流程
-
-​		Kafka 的 Producer 发送消息采用的是异步发送的方式。在消息发送的过程中，涉及到了 两个线程——main 线程和 Sender 线程，以及一个线程共享变量——RecordAccumulator。 main 线程将消息发送给 RecordAccumulator，Sender 线程不断从 RecordAccumulator 中拉取 消息发送到 Kafka broker。RecordAccumulator大小可以通过参数`buffer.memory`进行调整，默认大小为**32M**
-
-![image-20210307110628643](image\kafka生产者API流程图.png)
-
-### 发送的三种方式
-
-- 发后即忘
-- 同步
-- 异步
 
