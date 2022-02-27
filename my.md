@@ -13,11 +13,11 @@
 
 ## 专业技能
 
-* 框架：熟练掌握Dubbo、Spring、SpringBoot、Mybatis等开源框架的使用
-* 数据库：了解Mysql的使用及相关sql优化
-* NOSQL：掌握Redis数据结构及工作原理
-* 消息队列：掌握Kafka的原理及使用、了解RabbitMq的使用
-* 搜索引擎：了解Elasticsearch使用及其相关原理
+* 框架：Dubbo、Spring、SpringBoot、Mybatis等多年实战经验，可通过需求快速构建项目
+* 数据库：了解Mysql的使用，对索引优化及及存储引擎有过了解
+* NOSQL：掌握Redis底层磁盘及网络IO，数据持久化机制，高可用机制及分布式集群实现
+* 消息队列：掌握Kafka数据刷盘机制，集群化分片机制、了解RabbitMq的使用
+* 搜索引擎：了解Elasticsearch使用，分片机制及高可用性原理
 * 其他：Zookeeper、JVM调优，多线程，网络原理，常用算法及数据结构，linux 系统基本操作
 
 ## 工作经历

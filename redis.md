@@ -72,24 +72,22 @@ struct sdshdr {
 - 多态：链表节点使用void*指针来保存节点属性，并且可以通过list结构的dup、free、match三个属性节点设置特定函数，所以节点可以保存不同类型的值
 
 ```c
+//链表结构
+typedef struct list{
+    listNode *head;  //头节点
+    listNode *tail;	//尾节点
+    unsigned long len; //链表长度
+    void *(*dup)(void *ptr);
+    void (*free)(void *ptr);
+    int (*match)(void *ptr, void *key);
+}list;
+
 //链表节点
 typedef struct listNode{
     struct listNode *prev;
     struct listNode *next;
     void *value;
 }listNode；
-```
-
-```c
-//链表结构
-typedef struct list{
-    listNode *head;
-    listNode *tail;
-    unsigned long len;
-    void *(*dup)(void *ptr);
-    void (*free)(void *ptr);
-    int (*match)(void *ptr, void *key);
-}list;
 ```
 
 
@@ -103,12 +101,20 @@ typedef struct list{
 - 在进行哈希表扩展或收缩时，程序需要将现有哈希表包含的所有键值对rehash到新的hash表中，并且这个rehash过程并不是一次性完成的，而是渐进式的。
 
 ```c
+typedef struct dict {
+    dictType *type;
+    void *privdata;
+    dictht ht[2];  
+    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
+    int16_t pauserehash; /* If >0 rehashing is paused (<0 indicates coding error) */
+} dict;
+
 //定义一个hash桶，用来管理hashtable
 typedef struct dictht {//管理hashtable
     dictEntry **table;//指针数组，这个hash的桶
     unsigned long size;//元素个数
-    unsigned long sizemask;//
-    unsigned long used;//
+    unsigned long sizemask;//此字段的作用是当使用下标访问数据时，确保下标不越界。
+    unsigned long used;//存在多少个元素
 } dictht;
 
 //hash节点
@@ -357,6 +363,20 @@ ziplist作为有序集合时候，每个集合使用紧紧相邻的两个节点�
 
 ## 数据库键空间
 
+```c
+typedef struct redisDb {
+    dict *dict;                 /* The keyspace for this DB */
+    dict *expires;              /* Timeout of keys with a timeout set */
+    dict *blocking_keys;        /* Keys with clients waiting for data (BLPOP)*/
+    dict *ready_keys;           /* Blocked keys that received a PUSH */
+    dict *watched_keys;         /* WATCHED keys for MULTI/EXEC CAS */
+    int id;                     /* Database ID */
+    long long avg_ttl;          /* Average TTL, just for stats */
+    unsigned long expires_cursor; /* Cursor of the active expire cycle. */
+    list *defrag_later;         /* List of key names to attempt to defrag one by one, gradually. */
+} redisDb;
+```
+
 服务器中每个数据库都是一个redisDb结构的dict字典保存了所有数据库的所有键值对，我们将这个字段称为**键空间**（key space）
 
 - 键空间的所有的键都是字符串对象
@@ -384,6 +404,23 @@ Redis的过期策略就是指当Redis中缓存的key过期了，在RedisDB中，
 Redis中同时使用了**惰性过期和定期过期**两种过期策略。
 
 惰性删除：所有的读写操作会经过expireIfNeeded函数,如果过期就了删除,不执行下面的流程
+
+```c
+robj *lookupKeyWriteWithFlags(redisDb *db, robj *key, int flags) {
+    expireIfNeeded(db,key);
+    return lookupKey(db,key,flags);
+}
+
+int expireIfNeeded(redisDb *db, robj *key) {
+    if (!keyIsExpired(db,key)) return 0;
+
+    if (server.masterhost != NULL) return 1;
+    if (checkClientPauseTimeoutAndReturnIfPaused()) return 1;
+    /* Delete the key */
+    deleteExpiredKeyAndPropagate(db,key);
+    return 1;
+}
+```
 
 定期删除：每当redis服务器执行周期性函数 **redis.c/sercerCron** 会执行**activeExpireCycle** 从过期字典(**expires**)中随机获取一部分过期的键进行删除
 
@@ -573,7 +610,7 @@ Redis基于Reactor模式开发了网络事件处理器，这个处理器被称�
 
 # 关于redisServerCorn
 
-是redis的周期性操作的关键，其每100毫秒会执行一次（ Redis 2.8 开始， 用户可以通过修改 `hz` 选项来调整 `serverCron`的每秒执行次数），进而执行下面的相关操作
+是redis的周期性操作的关键，其每100毫秒会执行一次（ Redis 2.8 开始， 用户可以通过修改 `hz` 选项来调整 `serverCron`的每秒执行次数），进而执行下面的相关操作（在执行完文件事件之后会处理时间事件，时间事件就是serverCorn，这个也是**主线程执行**的）
 
 - 更新服务器的各类统计信息，比如时间、内存占用、数据库占用情况等
 - 清理数据库中的过期键值对
@@ -582,6 +619,146 @@ Redis基于Reactor模式开发了网络事件处理器，这个处理器被称�
 - 尝试进行 AOF 或 RDB 持久化操作
 - 如果服务器是主节点的话，对附属节点进行定期同步
 - 如果处于集群模式的话，对集群进行定期同步和连接测试
+
+```c
+	/* We need to do a few operations on clients asynchronously. */
+    clientsCron();
+
+    /* Handle background operations on Redis databases. */
+    databasesCron();
+
+    /* Start a scheduled AOF rewrite if this was requested by the user while
+     * a BGSAVE was in progress. */
+    if (!hasActiveChildProcess() &&
+        server.aof_rewrite_scheduled)
+    {
+        rewriteAppendOnlyFileBackground();  //AOF重写缓冲区
+    }
+
+    /* Check if a background saving or AOF rewrite in progress terminated. */
+    if (hasActiveChildProcess() || ldbPendingChildren())
+    {
+        run_with_period(1000) receiveChildInfo();
+        checkChildrenDone();
+    } else {
+        /* If there is not a background saving/rewrite in progress check if
+         * we have to save/rewrite now. */
+        for (j = 0; j < server.saveparamslen; j++) {
+            struct saveparam *sp = server.saveparams+j;
+
+            /* Save if we reached the given amount of changes,
+             * the given amount of seconds, and if the latest bgsave was
+             * successful or if, in case of an error, at least
+             * CONFIG_BGSAVE_RETRY_DELAY seconds already elapsed. */
+            if (server.dirty >= sp->changes &&
+                server.unixtime-server.lastsave > sp->seconds &&
+                (server.unixtime-server.lastbgsave_try >
+                 CONFIG_BGSAVE_RETRY_DELAY ||
+                 server.lastbgsave_status == C_OK))
+            {
+                serverLog(LL_NOTICE,"%d changes in %d seconds. Saving...",
+                    sp->changes, (int)sp->seconds);
+                rdbSaveInfo rsi, *rsiptr;
+                rsiptr = rdbPopulateSaveInfo(&rsi);
+                rdbSaveBackground(server.rdb_filename,rsiptr);
+                break;
+            }
+        }
+
+        /* Trigger an AOF rewrite if needed. */
+        if (server.aof_state == AOF_ON &&
+            !hasActiveChildProcess() &&
+            server.aof_rewrite_perc &&
+            server.aof_current_size > server.aof_rewrite_min_size)
+        {
+            long long base = server.aof_rewrite_base_size ?
+                server.aof_rewrite_base_size : 1;
+            long long growth = (server.aof_current_size*100/base) - 100;
+            if (growth >= server.aof_rewrite_perc) {
+                serverLog(LL_NOTICE,"Starting automatic rewriting of AOF on %lld%% growth",growth);
+                rewriteAppendOnlyFileBackground();
+            }
+        }
+    }
+    /* Just for the sake of defensive programming, to avoid forgeting to
+     * call this function when need. */
+    updateDictResizePolicy();
+
+
+    /* AOF postponed flush: Try at every cron cycle if the slow fsync
+     * completed. */
+    if (server.aof_state == AOF_ON && server.aof_flush_postponed_start)
+        flushAppendOnlyFile(0);
+
+    /* AOF write errors: in this case we have a buffer to flush as well and
+     * clear the AOF error in case of success to make the DB writable again,
+     * however to try every second is enough in case of 'hz' is set to
+     * a higher frequency. */
+    run_with_period(1000) {
+        if (server.aof_state == AOF_ON && server.aof_last_write_status == C_ERR)
+            flushAppendOnlyFile(0);
+    }
+
+    /* Clear the paused clients state if needed. */
+    checkClientPauseTimeoutAndReturnIfPaused();
+
+    /* Replication cron function -- used to reconnect to master,
+     * detect transfer failures, start background RDB transfers and so forth. 
+     * 
+     * If Redis is trying to failover then run the replication cron faster so
+     * progress on the handshake happens more quickly. */
+    if (server.failover_state != NO_FAILOVER) {
+        run_with_period(100) replicationCron();
+    } else {
+        run_with_period(1000) replicationCron();
+    }
+
+    /* Run the Redis Cluster cron. */
+    run_with_period(100) {
+        if (server.cluster_enabled) clusterCron();
+    }
+
+    /* Run the Sentinel timer if we are in sentinel mode. */
+    if (server.sentinel_mode) sentinelTimer();
+
+    /* Cleanup expired MIGRATE cached sockets. */
+    run_with_period(1000) {
+        migrateCloseTimedoutSockets();
+    }
+
+    /* Stop the I/O threads if we don't have enough pending work. */
+    stopThreadedIOIfNeeded();
+
+    /* Resize tracking keys table if needed. This is also done at every
+     * command execution, but we want to be sure that if the last command
+     * executed changes the value via CONFIG SET, the server will perform
+     * the operation even if completely idle. */
+    if (server.tracking_clients) trackingLimitUsedSlots();
+
+    /* Start a scheduled BGSAVE if the corresponding flag is set. This is
+     * useful when we are forced to postpone a BGSAVE because an AOF
+     * rewrite is in progress.
+     *
+     * Note: this code must be after the replicationCron() call above so
+     * make sure when refactoring this file to keep this order. This is useful
+     * because we want to give priority to RDB savings for replication. */
+    if (!hasActiveChildProcess() &&
+        server.rdb_bgsave_scheduled &&
+        (server.unixtime-server.lastbgsave_try > CONFIG_BGSAVE_RETRY_DELAY ||
+         server.lastbgsave_status == C_OK))
+    {
+        rdbSaveInfo rsi, *rsiptr;
+        rsiptr = rdbPopulateSaveInfo(&rsi);
+        if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK)
+            server.rdb_bgsave_scheduled = 0;
+    }
+
+    /* Fire the cron loop modules event. */
+    RedisModuleCronLoopV1 ei = {REDISMODULE_CRON_LOOP_VERSION,server.hz};
+    moduleFireServerEvent(REDISMODULE_EVENT_CRON_LOOP,
+                          0,
+                          &ei);
+```
 
 
 
