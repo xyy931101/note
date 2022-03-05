@@ -51,6 +51,8 @@
 
 1. **项目名称：神兵产品化开放平台&emsp;&emsp;&emsp;&emsp;项目时间：2018.12-至今** 
 
+   **SpringBoot+Dubbo+postgrepsql+Redis+Elasticsearch+Rabbitmq+Mybatis+Sentinel**
+
    - 完成相应接口的开发，对各可能对外开发的功能采用钩子函数，对外实现拓展功能
    - 插件化平台开发机制，采用插拔式的设计理念，子插件在线热更新功能。插件可以通过平台提供的Api，完成相关功能的校验、特定动作后的回调、定制化接口的编写等一系列操作。插件化的开发模式有利于平台基础功能的稳定性、功能拓展、定制化需求的开发；
    - 采用ES提供全文检索功能，减少系统的响应及DB的压力，避免复杂查询造成系统的响应，从而导致系统异常
@@ -59,6 +61,8 @@
 
 2. **项目名称：神兵用户中心&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;项目时间：2018.02-至今** 
 
+   **Springboot+RabbitMq+Mybatis+PostgreSQL+Redis+Dubbo**
+
    - 完成对应需求的接口编写，保质保量的完成各子系统对于用户中心的功能依赖
    - 采用本地缓存，实现对热点key的异步加载，避免系统被击穿
    - 采用RabbitMq实现对相应调用的解耦，各子系统可自己关注相应事件，避免二次开发
@@ -66,6 +70,8 @@
    - 对接集团的SSO，实现自己的登录页面，二维码扫描登录接口等
 
 3. **项目名称：神兵权限中心&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;项目时间：2018.02-至今** 
+
+   **Springboot+RabbitMq+Mybatis+PostgreSQL+Redis+Dubbo**
 
    - 完成对应需求的接口编写，保质保量的完成各子系统对于权限中心的功能依赖
    - 引入sentinel对系统进行限流，服务降级等相关功能，避免被其他子系统拖垮
