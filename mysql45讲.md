@@ -53,8 +53,19 @@
 注意： InnoDB 这种引擎导致虽然删除了表的部分记录,但是它的索引还在, 并未释放。只能是重新建表才能重建索引。
 
 1. 覆盖索引：如果查询条件使用的是普通索引（或是联合索引的最左原则字段），查询结果是联合索引的字段或是主键，不用回表操作，直接返回结果，减少IO磁盘读写读取正行数据
+
 2. 最左前缀：联合索引的最左 N 个字段，也可以是字符串索引的最左 M 个字符
-3. 联合索引：根据创建联合索引的顺序，以最左原则进行where检索，比如（age，name）以age=1 或 age= 1 and name=‘张三’可以使用索引，单以name=‘张三’ 不会使用索引，考虑到存储空间的问题，还请根据业务需求，将查找频繁的数据进行靠左创建索引。
+
+3. **联合索引**：根据创建联合索引的顺序，以最左原则进行where检索，比如（age，name）以age=1 或 age= 1 and name=‘张三’可以使用索引，单以name=‘张三’ 不会使用索引，考虑到存储空间的问题，还请根据业务需求，将查找频繁的数据进行靠左创建索引。其中索引的建立是根据最左的列建立，其叶子节点是联合的。
+
+   ```
+   1. 条件: 联合索引应用要满足最左原则
+   a. 建立联合索引时，选择重复值较少的列作为最左列。
+   b. 使用联合索引时，查询条件中，必须包含最左列，才有可能应用到联合索引。 联合索引不同覆盖场景
+   ```
+
+   
+
 4. 索引下推：like 'hello%’and age >10 检索，MySQL5.6版本之前，会对匹配的数据进行回表查询。5.6版本后，会先过滤掉age<10的数据，再进行回表查询，减少回表率，提升检索速度(只有联合索引才会有索引下推)
 
 ## 普通索引与唯一索引的选择
@@ -82,6 +93,84 @@
 这种方式用于前缀区分度不高后缀区分度高的场景，目的还是要提高索引的区分度，使用这种方式不适合范围检索
 
 4：创建 hash 字段索引，查询性能稳定，有额外的存储和计算消耗，跟第三种方式一样，都不支持范围扫描。
+
+
+
+------
+
+##  **执行计划获取和分析**
+
+```sql
+获取语句的执行计划工具，只针对索引应用和优化器算法应用部分信息。
+explain (format = tree) 
+desc
+mysql> desc select * from city where countrycode='CHN';
+mysql> explain  select * from city where countrycode='CHN';
+```
+
+### 信息介绍
+
+```sql
+table :此次查询访问的表
+type :索引查询的类型(ALL、index、range、ref、eq_ref、const(system)、NULL) possible_keys :可能会应用的索引
+key : 最终选择的索引
+key_len :索引覆盖长度，主要是用来判断联合索引应用长度。
+rows :需要扫描的行数
+Extra :额外信息
+```
+
+
+
+### type信息详解
+
+```sql
+# ALL 没有使用到索引
+a. 查询条件没建立索引
+mysql> desc select * from city where district='shandong';
+b. 有索引不走
+mysql> desc select * from city where countrycode!='CHN';
+mysql> desc select * from city where countrycode not in ('CHN','USA'); mysql> desc select * from city where countrycode like '%CH%';
+```
+
+```sql
+# index 全索引扫描
+mysql> desc select countrycode from city;
+注意: 建议不要出现。特别是聚簇索引INDEX，相当于全表扫描。
+```
+
+```sql
+# range 索引范围扫描
+会受到: B+TREE额外优化，叶子节点双向指针
+mysql> desc select * from city where id<10;
+mysql> desc select * from city where countrycode like 'CH%';
+注意: 范围查找最好缩小查询范围。比如> < 要有上限和下限，或者可以使用limit进行限制。 特别是在做delete 和 update。在索引设计不合理时，使用limit有可能会出现主从数据不一致。
+以下两种查询，大几率受不到叶子节点双向指针优化。
+mysql> desc select * from city where countrycode in ('CHN','USA');
+mysql> desc select * from city where countrycode='CHN' or countrycode='USA';
+```
+
+```sql
+# ref 辅助索引等值查询
+desc select * from city where countrycode='CHN';
+```
+
+```sql
+#eq_ref : 多表连接查询中，非驱动表的连接条件是主键或唯一键时。
+mysql> desc select city.name,country.name
+from city
+left join country
+on city.countrycode=country.code where city.population<100;
+```
+
+```sql
+# const(system): 主键或唯一键等值查询 
+mysql> select * from city where id=1;
+```
+
+```sql
+# NULL
+mysql> desc select * from city where id=1000000000000000;
+```
 
 
 
