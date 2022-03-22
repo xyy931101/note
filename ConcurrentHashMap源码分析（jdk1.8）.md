@@ -49,24 +49,28 @@ public class ConcurrentHashMap<K,V> extends AbstractMap<K,V> implements Concurre
   /**
   
   - The number of bits used for generation stamp in sizeCtl.
-  - Must be at least 6 for 32bit arrays. */ private static int RESIZE_STAMP_BITS = 16;
+  - Must be at least 6 for 32bit arrays. */ 
+  private static int RESIZE_STAMP_BITS = 16;
   
   /**
   
   - The maximum number of threads that can help resize.
-  - Must fit in 32 - RESIZE_STAMP_BITS bits. */ private static final int MAX_RESIZERS = (1 << (32 - RESIZE_STAMP_BITS)) - 1;
+  - Must fit in 32 - RESIZE_STAMP_BITS bits. */ 
+  private static final int MAX_RESIZERS = (1 << (32 - RESIZE_STAMP_BITS)) - 1;
   
   /**
   
-  - The bit shift for recording size stamp in sizeCtl. */ private static final int RESIZE_STAMP_SHIFT = 32 - RESIZE_STAMP_BITS;
+  - The bit shift for recording size stamp in sizeCtl. */ 
+  private static final int RESIZE_STAMP_SHIFT = 32 - RESIZE_STAMP_BITS;
   
   /*
   
   - Encodings for Node hash fields. See above for explanation. */ static final int MOVED = -1; // hash for forwarding nodes static final int TREEBIN = -2; // hash for roots of trees static final int RESERVED = -3; // hash for transient reservations static final int HASH_BITS = 0x7fffffff; // usable bits of normal node hash
   
-  /** Number of CPUS, to place bounds on some sizings */ static final int NCPU = Runtime.getRuntime().availableProcessors();
+  /** Number of CPUS, to place bounds on some sizings */ 
+  static final int NCPU = Runtime.getRuntime().availableProcessors();
   ```
-
+  
   
 
 ## 主要的内部类

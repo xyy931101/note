@@ -101,15 +101,15 @@
 
 #### 对象头
 
-- 运行时元数据MarkWord
+- 运行时元数据MarkWord    **8字节**
   1. 哈希值 hascode
-  2. GC分代年龄
+  2. GC分代年龄    **4字节,所以分代年龄最大15**
   3. 锁状态标志
   4. 线程持有的锁
   5. 偏向线程ID
   6. 偏向时间戳
-- 类型指针：  指向类元数据InstanceClass，确定该对象的类型
-- 如果是数组，则还需要记录数组的长度
+- 类型指针：  指向类元数据InstanceClass，确定该对象的类型    **4字节(默认,也有可能是8字节)**
+- 如果是数组，则还需要记录数组的长度      **4字节**
 
 #### 示例数据（Instance Data）
 
@@ -133,39 +133,24 @@
 
 HotSpot主要使用第二种方式，因为JAVA访问对象非常频繁，可以减少一次类型指针的访问开销
 
+![markword-64](/Users/xiongyayun/workspace/note/image/markword-64.png)
 
-
-### JVM参数设置
-
-- **堆大小设置**
-
-> ​	-Xms:用来设置堆空间(新生代+老年代)的**初始**内存大小
+> https://cloud.tencent.com/developer/article/1480590 
 >
-> ​		-X: 是JVM的运行参数
+> https://cloud.tencent.com/developer/article/1484167
 >
-> ​		ms:memory start 初始内存
+> https://cloud.tencent.com/developer/article/1485795
 >
-> ​	-Xmx:用来设置堆空间(新生代+老年代)的**最大**内存大小
->
-> ​		mx:memory max 最大内存
+> https://cloud.tencent.com/developer/article/1482500
 
-- **默认设置**
+### 对象定位
 
-  > 初始化内存大小：电脑内存大小/64
+1. 句柄池
+2. 直接指针
 
->最大内存大小：电脑内存/4
->
->新生代与老年代比例 默认1:2，也就是新生代占整个内存的1/3
+------
 
-- **手动设置**
 
-  -Xms600m -Xmx600m -XX:NewRatio=4
-
-  开发中建议将初始堆内存和最大内存设置成相同的值 避免频繁FullGC
-
-- **查看参数设置**
-
-  jps 查看进行ID jstat -gc ${pid}查看进程各个区的大小
 
 ## GC(垃圾回收器)
 
@@ -358,59 +343,6 @@ HotSpot主要使用第二种方式，因为JAVA访问对象非常频繁，可以
 >
 > 5.避免代码内存泄漏
 
-### GC常用参数
-
-> - -Xmn -Xms -Xmx -Xss 年轻代 最小堆 最大堆 栈空间
-> - -XX:+UseTLAB 使用TLAB，默认打开
-> - -XX:+PrintTLAB 打印TLAB的使用情况
-> - -XX:TLABSize 设置TLAB大小
-> - -XX:+DisableExplictGC System.gc()不管用 ，FGC
-> - -XX:+PrintGC
-> - -XX:+PrintGCDetails
-> - -XX:+PrintHeapAtGC
-> - -XX:+PrintGCTimeStamps
-> - -XX:+PrintGCApplicationConcurrentTime (低) 打印应用程序时间
-> - -XX:+PrintGCApplicationStoppedTime （低） 打印暂停时长
-> - -XX:+PrintReferenceGC （重要性低） 记录回收了多少种不同引用类型的引用
-> - -verbose:class 类加载详细过程
-> - -XX:+PrintVMOptions
-> - -XX:+PrintFlagsFinal  -XX:+PrintFlagsInitial 必须会用
-> - -Xloggc:opt/log/gc.log
-> - -XX:MaxTenuringThreshold 升代年龄，最大值15
-> - 锁自旋次数 -XX:PreBlockSpin 热点代码检测参数-XX:CompileThreshold 逃逸分析 标量替换 ... 这些不建议设置
-
-### Parallel常用参数
-
-> - -XX:SurvivorRatio
-> - -XX:PreTenureSizeThreshold 大对象到底多大
-> - -XX:MaxTenuringThreshold
-> - -XX:+ParallelGCThreads 并行收集器的线程数，同样适用于CMS，一般设为和CPU核数相同
-> - -XX:+UseAdaptiveSizePolicy 自动选择各区大小比例
-
-### CMS常用参数
-
-> - -XX:+UseConcMarkSweepGC
-> - -XX:ParallelCMSThreads CMS线程数量
-> - -XX:CMSInitiatingOccupancyFraction 使用多少比例的老年代后开始CMS收集，默认是68%(近似值)，如果频繁发生SerialOld卡顿，应该调小，（频繁CMS回收）
-> - -XX:+UseCMSCompactAtFullCollection 在FGC时进行压缩
-> - -XX:CMSFullGCsBeforeCompaction 多少次FGC之后进行压缩
-> - -XX:+CMSClassUnloadingEnabled
-> - -XX:CMSInitiatingPermOccupancyFraction 达到什么比例时进行Perm回收
-> - GCTimeRatio 设置GC时间占用程序运行时间的百分比
-> - -XX:MaxGCPauseMillis 停顿时间，是一个建议时间，GC会尝试用各种手段达到这个时间，比如减小年轻代
-
-### G1常用参数
-
-> - -XX:+UseG1GC
-> - -XX:MaxGCPauseMillis 建议值，G1会尝试调整Young区的块数来达到这个值
-> - -XX:GCPauseIntervalMillis ？GC的间隔时间
-> - -XX:+G1HeapRegionSize 分区大小，建议逐渐增大该值，1 2 4 8 16 32。 随着size增加，垃圾的存活时间更长，GC间隔更长，但每次GC的时间也会更长 ZGC做了改进（动态区块大小）
-> - G1NewSizePercent 新生代最小比例，默认为5%
-> - G1MaxNewSizePercent 新生代最大比例，默认为60%
-> - GCTimeRatio GC时间建议比例，G1会根据这个值调整堆空间
-> - ConcGCThreads 线程数量
-> - InitiatingHeapOccupancyPercent 启动G1的堆空间占用比例
-
 ------
 
 ## 类文件结构
@@ -471,7 +403,7 @@ HotSpot主要使用第二种方式，因为JAVA访问对象非常频繁，可以
 		验证类是否符合JVM规范，是否是一个有效的字节码文件，验证内容涵盖了类数据信息的格式验证、语义分析、操作验证等。
 - 格式验证：验证是否符合class文件规范
 - 语义验证：检查一个被标记为final的类型是否包含子类；检查一个类中的final方法视频被子类进行重写；确保父类和子类之间没有不兼容的一些方法声明（比如方法签名相同，但方法的返回值不同）
-- 操作验证：在操作数栈中的数据必须进行正确的操作，对常量池中的各种符号引用执行验证（通常在解析阶段执行，检查是否通过富豪引用中描述的全限定名定位到指定类型上，以及类成员信息的访问修饰符是否允许访问等）
+- 操作验证：在操作数栈中的数据必须进行正确的操作，对常量池中的各种符号引用执行验证（通常在解析阶段执行，检查是否通过符号引用中描述的全限定名定位到指定类型上，以及类成员信息的访问修饰符是否允许访问等）
 - 2）、准备
   		为类中的所有静态变量分配内存空间，并为其设置一个初始值（由于还没有产生对象，实例变量不在此操作范围内）被final修饰的静态变量，会直接赋予原值；类字段的字段属性表中存在ConstantValue属性，则在准备阶段，其值就是ConstantValue的值
   3）、解析

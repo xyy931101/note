@@ -14,7 +14,7 @@
 
 ## 两阶段提交：主要解决回滚
 
-![](image/mysql/两阶段提交.webp.webp)
+## **MVCC**![](image/mysql/两阶段提交.webp.webp)
 
 ### 在两阶段提交的不同时刻，MySQL 异常重启会出现什么现象。
 
