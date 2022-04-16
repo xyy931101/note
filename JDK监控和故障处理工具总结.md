@@ -10,13 +10,13 @@ JDK提供的监控工具入门看java guide的这篇文章：[JDK 监控和故�
 
 top (top -Hp pid (-H表示查看指定进程内的线程对系统资源占用的分析))
 
-jps
+jps 查看虚拟机进程状况
 
-jstat
+jstat	虚拟机统计信息监控工具
 
-jstack
+jstack	java堆跟踪工具
 
-jmap
+jmap	java内存印象工具
 
 -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/var/deploy/logs/dump
 
