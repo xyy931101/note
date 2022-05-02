@@ -74,19 +74,19 @@ struct sdshdr {
 ```c
 //链表结构
 typedef struct list{
-    listNode *head;  //头节点
-    listNode *tail;	//尾节点
-    unsigned long len; //链表长度
-    void *(*dup)(void *ptr);
-    void (*free)(void *ptr);
-    int (*match)(void *ptr, void *key);
+    listNode *head;  			//头节点
+    listNode *tail;				//尾节点
+    unsigned long len; 			//链表长度
+    void *(*dup)(void *ptr);	//节点复制函数
+    void (*free)(void *ptr);	//节点释放函数
+    int (*match)(void *ptr, void *key);	//节点值对比函数
 }list;
 
 //链表节点
 typedef struct listNode{
-    struct listNode *prev;
-    struct listNode *next;
-    void *value;
+    struct listNode *prev;	//前置节点
+    struct listNode *next;	//后置节点
+    void * value;			//节点的值
 }listNode；
 ```
 
@@ -94,7 +94,7 @@ typedef struct listNode{
 
 ### Hashtable
 
-- 字典被广泛应用于Redis，其中宝库数据库和哈希键
+- 字典被广泛应用于Redis，其中包括数据库和哈希键
 - Redis'中的字段使用hashtable作为底层实现，每个字段带有两个哈希表，一个平时使用，一个仅在rehash时使用。及渐进式hash
 - 当字段被用作数据库的底层实现，或者哈希键的底层实现是，使用MurmurHash2来计算键的哈希值
 - 哈希表使用链地址法来解决键冲突，被分配到同一个索引上的键值会采用**头插法**形成单向链表
@@ -105,16 +105,16 @@ typedef struct dict {
     dictType *type;
     void *privdata;
     dictht ht[2];  
-    long rehashidx; /* rehashing not in progress if rehashidx == -1 */
-    int16_t pauserehash; /* If >0 rehashing is paused (<0 indicates coding error) */
+    long rehashidx;		//当rehash不在进行时,值为-1,如果不为-1,则代表当前rehash的进度
+    int16_t pauserehash;//
 } dict;
 
 //定义一个hash桶，用来管理hashtable
-typedef struct dictht {//管理hashtable
-    dictEntry **table;//指针数组，这个hash的桶
-    unsigned long size;//元素个数
-    unsigned long sizemask;//此字段的作用是当使用下标访问数据时，确保下标不越界。
-    unsigned long used;//存在多少个元素
+typedef struct dictht {		//管理hashtable
+    dictEntry **table;		//指针数组，这个hash的桶
+    unsigned long size;		//元素个数
+    unsigned long sizemask;	//此字段的作用是当使用下标访问数据时，确保下标不越界。
+    unsigned long used;		//存在多少个元素
 } dictht;
 
 //hash节点
@@ -162,13 +162,12 @@ typedef struct zlentry {
 
 
 
-zlbytes: ziplist的长度（单位: 字节)，是一个32位无符号整数
-zltail: ziplist最后一个节点的偏移量，反向遍历ziplist或者pop尾部节点的时候有用。
-zllen: ziplist的节点（entry）个数
-entry: 节点
-zlend: 值为0xFF，用于标记ziplist的结尾
-普通数组的遍历是根据数组里存储的数据类型 找到下一个元素的，例如int类型的数组访问下一个元素时每次只需要移动一个sizeof(int)就行（实际上开发者只需让指针p+1就行，在这里引入sizeof(int)只是为了说明区别）。
-上文说了，ziplist的每个节点的长度是可以不一样的，而我们面对不同长度的节点又不可能直接sizeof(entry)，那么它是怎么访问下一个节点呢？
+zlbytes:	 ziplist的长度（4字节)，是一个32位无符号整数，在对压缩列表进行内存重分配或计算zlend时使用
+zltail:	 	ziplist最后一个节点的偏移量（4字节)，反向遍历ziplist或者pop尾部节点的时候有用。
+zllen:	 	ziplist的节点（entry）个数（2字节）
+entry:		节点
+zlend: 		值为0xFF，用于标记ziplist的结尾
+
 ziplist将一些必要的偏移量信息记录在了每一个节点里，使之能跳到上一个节点或下一个节点。
 接下来我们看看节点的布局
 
@@ -190,21 +189,23 @@ ziplist将一些必要的偏移量信息记录在了每一个节点里，使之�
 2. 进行对比操作时，不仅要检查 `score` 值，还要检查 `member` ：当 `score` 值可以重复时，单靠 `score` 值无法判断一个元素的身份，所以需要连 `member` 域都一并检查才行。
 3. 每个节点都带有一个高度为 1 层的后退指针，用于从表尾方向向表头方向迭代：当执行 [ZREVRANGE](http://redis.readthedocs.org/en/latest/sorted_set/zrevrange.html#zrevrange) 或 [ZREVRANGEBYSCORE](http://redis.readthedocs.org/en/latest/sorted_set/zrevrangebyscore.html#zrevrangebyscore) 这类以逆序处理有序集的命令时，就会用到这个属性。
 4. 每个节点的层高都是1-32之前的随机数
+5. 跳跃表是一种随机化数据结构，查找、添加、删除操作都可以在对数期望时间下完成。
+6. 跳跃表目前在 Redis 的唯一作用，就是作为有序集类型的底层数据结构（之一，另一个构成有序集的结构是字典）。
+7. 为了满足自身的需求，Redis 基于 William Pugh 论文中描述的跳跃表进行了修改，包括：
+   1. `score` 值可重复。
+   2. 对比一个元素需要同时检查它的 `score` 和 `memeber` 。
+   3. 每个节点带有高度为 1 层的后退指针，用于从表尾方向向表头方向迭代。
 
 这个修改版的跳跃表由 `redis.h/zskiplist` 结构定义：
 
 ```c
 typedef struct zskiplist {
-
     // 头节点，尾节点
     struct zskiplistNode *header, *tail;
-
     // 节点数量
     unsigned long length;
-
     // 目前表内节点的最大层数
     int level;
-
 } zskiplist;
 
 ```
@@ -213,25 +214,18 @@ typedef struct zskiplist {
 
 ```c
 typedef struct zskiplistNode {
-
     // member 对象
     robj *obj;
-
     // 分值
     double score;
-
     // 后退指针
     struct zskiplistNode *backward;
-
     // 层
     struct zskiplistLevel {
-
         // 前进指针
         struct zskiplistNode *forward;
-
         // 这个层跨越的节点数量
         unsigned int span;
-
     } level[];
 
 } zskiplistNode;
@@ -246,13 +240,27 @@ typedef struct zskiplistNode {
 
 ```c
 typedef struct intset {
-    uint32_t encoding; //intset的类型编码
-    uint32_t length; //成员元素的个数
-    int8_t contents[];//用来存储成员的柔性数组
+    uint32_t encoding;	//intset的类型编码
+    uint32_t length; 	//成员元素的个数
+    int8_t contents[];	//用来存储成员的柔性数组
 }
 ```
 
+| 编码方式 | 范围                   |
+| -------- | ---------------------- |
+| int16_t  | -32768~32767           |
+| int32_t  | -2147483648~2147483647 |
+| int64_t  | -2^63 ~ 2^63-1         |
 
+#### intset升级操作
+
+1. 根据新元素的类型，扩展整个整数集合底层数组的空间大小，并为新元素分配空间
+2. 将底层数组现有的所有元素都转换成与新元素相同的类型，并将类型转换后的元素放置在正确的位上，而且在放置元素的过程中，需要继续维持底层数据的有序性
+3. 将新元素添加到底层数组里面
+
+
+
+------
 
 # Redis的数据类型
 
@@ -267,22 +275,17 @@ typedef struct intset {
 
 ```c
 typedef struct redisObject {
-    unsigned type:4;				//数据类型(String, List, Set. Hash, Zset)
+    unsigned type:4;			//数据类型(String, List, Set. Hash, Zset)
     unsigned encoding:4;		//编码格式(int, emstr,raw,hash,ziplist,skiplist)
     unsigned lru:24; 				/* LRU time (relative to global lru_clock) or
                             * LFU data (least significant 8 bits frequency
                             * and most significant 16 bits access time). */
-    int refcount; 					//引用计数
-    void *ptr;							//对象指针
+    int refcount; 				//引用计数
+    void *ptr;					//对象指针
 } robj;
 ```
 
-- 跳跃表是一种随机化数据结构，查找、添加、删除操作都可以在对数期望时间下完成。
-- 跳跃表目前在 Redis 的唯一作用，就是作为有序集类型的底层数据结构（之一，另一个构成有序集的结构是字典）。
-- 为了满足自身的需求，Redis 基于 William Pugh 论文中描述的跳跃表进行了修改，包括：
-  1. `score` 值可重复。
-  2. 对比一个元素需要同时检查它的 `score` 和 `memeber` 。
-  3. 每个节点带有高度为 1 层的后退指针，用于从表尾方向向表头方向迭代。
+
 
 ### String（字符串对象）
 
@@ -296,7 +299,7 @@ typedef struct redisObject {
 
   1. embstr创建时，内存分配次数从raw的两次降为一次
   
-     **减少了sdshdr的呢村分配,在创建redisObj的时候直接申请了小于64字节的内存，基于缓存行**
+     **减少了sdshdr的内存分配,在创建redisObj的时候直接申请了小于64字节的内存，基于缓存行**
 
   2. 释放时，只需要调用一次内存释放函数，raw需要两次
   
@@ -472,6 +475,9 @@ Redis的内存淘汰策略是指在Redis的用于缓存的内存不足时，怎�
 
 ​		**auto-aof-rewrite-percentage** ：配置了当 aof 文件相较于上一版本的 aof 文件大小的百分比达到多少时触发 AOF 重写。举个例子，auto-aof-rewrite-percentage 选项配置为 100，上一版本的 aof 文件大小为 100M，那么当我们的 aof 文件达到 200M 的时候，触发 AOF 重写。
 
+- AOF重写期间，服务器进程可以(父进程)可以继续处理命令请求
+- 子进程带有服务器进程的数据副本,使用子进程而不是线程，**可以在避免使用锁的情况下，保证数据的安全**
+
 重写过程由后台子进程bfrewriteaof执行,会fork主线程的内存记录重写日志，还会把当前主线程在重写期间的回写日志记录到重写日志的缓冲区。当AOF重写工作后，会向父进行发送信号，当父进行接收到信号后，会进行以下操作
 
 1. 将AOF重写缓冲区所有数据写入到新的AOF文件，保持数据库跟AOF文件的状态一致
@@ -592,7 +598,7 @@ Redis基于Reactor模式开发了网络事件处理器，这个处理器被称�
 
 # 事件
 
-## 文件时间
+## 文件事件
 
 **accpetTcpHandler**:连接应答处理器
 
@@ -639,7 +645,29 @@ def aeProcessEvents
 	processTimeEvents();
 ```
 
-# 关于redisServerCorn
+## 命令请求过程
+
+1. 客户端发送命令请求
+2. 读取命令请求
+   - 读取套接字中协议格式命令请求，并将其保存到客户端的输入缓冲区
+   - 对输入缓冲区中的命令请求进行分析，提取出命令参数及命令个数
+   - 调用执行命令，执行客户端指定的命令
+3. 命令执行器
+   1. 查找命令实现
+   2. 执行预备操作
+      - 检查客户端的状态，cmd指针是否指向NULL
+      - 检查客户端是否已经通过了身份验证，未通过只能执行AUTH命令
+      - 如果服务器打开了maxmemory功能，在执行命令前先检查服务器内存，并在有需要时进行内存回收
+   3. 调用命令函数的实现
+   4. 执行后续工作
+      - 如果开启了慢查询日志功能，那么慢查询日志模块会检查是否需要为刚刚执行的命令添加慢查询日志
+      - 根据刚才命令耗时时长，更新被执行命令的redisCommand结构的milliseconds属性
+      - 如果开启了AOF，那么AOF模块会将刚刚执行的命令写入AOF缓冲区
+      - 如果有其他从服务器在复制当前服务器，则将刚才执行的命令传播给所有从服务器，且写入复制积压缓冲区
+4. 将命令回复给客户端
+5. 客户端接收并打印命令回复
+
+# redisServerCorn
 
 是redis的周期性操作的关键，其每100毫秒会执行一次（ Redis 2.8 开始， 用户可以通过修改 `hz` 选项来调整 `serverCron`的每秒执行次数），进而执行下面的相关操作（在执行完文件事件之后会处理时间事件，时间事件就是serverCorn，这个也是**主线程执行**的）
 
@@ -650,148 +678,6 @@ def aeProcessEvents
 - 尝试进行 AOF 或 RDB 持久化操作
 - 如果服务器是主节点的话，对附属节点进行定期同步
 - 如果处于集群模式的话，对集群进行定期同步和连接测试
-
-```c
-	/* We need to do a few operations on clients asynchronously. */
-    clientsCron();
-
-    /* Handle background operations on Redis databases. */
-    databasesCron();
-
-    /* Start a scheduled AOF rewrite if this was requested by the user while
-     * a BGSAVE was in progress. */
-    if (!hasActiveChildProcess() &&
-        server.aof_rewrite_scheduled)
-    {
-        rewriteAppendOnlyFileBackground();  //AOF重写缓冲区
-    }
-
-    /* Check if a background saving or AOF rewrite in progress terminated. */
-    if (hasActiveChildProcess() || ldbPendingChildren())
-    {
-        run_with_period(1000) receiveChildInfo();
-        checkChildrenDone();
-    } else {
-        /* If there is not a background saving/rewrite in progress check if
-         * we have to save/rewrite now. */
-        for (j = 0; j < server.saveparamslen; j++) {
-            struct saveparam *sp = server.saveparams+j;
-
-            /* Save if we reached the given amount of changes,
-             * the given amount of seconds, and if the latest bgsave was
-             * successful or if, in case of an error, at least
-             * CONFIG_BGSAVE_RETRY_DELAY seconds already elapsed. */
-            if (server.dirty >= sp->changes &&
-                server.unixtime-server.lastsave > sp->seconds &&
-                (server.unixtime-server.lastbgsave_try >
-                 CONFIG_BGSAVE_RETRY_DELAY ||
-                 server.lastbgsave_status == C_OK))
-            {
-                serverLog(LL_NOTICE,"%d changes in %d seconds. Saving...",
-                    sp->changes, (int)sp->seconds);
-                rdbSaveInfo rsi, *rsiptr;
-                rsiptr = rdbPopulateSaveInfo(&rsi);
-                rdbSaveBackground(server.rdb_filename,rsiptr);
-                break;
-            }
-        }
-
-        /* Trigger an AOF rewrite if needed. */
-        if (server.aof_state == AOF_ON &&
-            !hasActiveChildProcess() &&
-            server.aof_rewrite_perc &&
-            server.aof_current_size > server.aof_rewrite_min_size)
-        {
-            long long base = server.aof_rewrite_base_size ?
-                server.aof_rewrite_base_size : 1;
-            long long growth = (server.aof_current_size*100/base) - 100;
-            if (growth >= server.aof_rewrite_perc) {
-                serverLog(LL_NOTICE,"Starting automatic rewriting of AOF on %lld%% growth",growth);
-                rewriteAppendOnlyFileBackground();
-            }
-        }
-    }
-    /* Just for the sake of defensive programming, to avoid forgeting to
-     * call this function when need. */
-    updateDictResizePolicy();
-
-
-    /* AOF postponed flush: Try at every cron cycle if the slow fsync
-     * completed. */
-    if (server.aof_state == AOF_ON && server.aof_flush_postponed_start)
-        flushAppendOnlyFile(0);
-
-    /* AOF write errors: in this case we have a buffer to flush as well and
-     * clear the AOF error in case of success to make the DB writable again,
-     * however to try every second is enough in case of 'hz' is set to
-     * a higher frequency. */
-    run_with_period(1000) {
-        if (server.aof_state == AOF_ON && server.aof_last_write_status == C_ERR)
-            flushAppendOnlyFile(0);
-    }
-
-    /* Clear the paused clients state if needed. */
-    checkClientPauseTimeoutAndReturnIfPaused();
-
-    /* Replication cron function -- used to reconnect to master,
-     * detect transfer failures, start background RDB transfers and so forth. 
-     * 
-     * If Redis is trying to failover then run the replication cron faster so
-     * progress on the handshake happens more quickly. */
-    if (server.failover_state != NO_FAILOVER) {
-        run_with_period(100) replicationCron();
-    } else {
-        run_with_period(1000) replicationCron();
-    }
-
-    /* Run the Redis Cluster cron. */
-    run_with_period(100) {
-        if (server.cluster_enabled) clusterCron();
-    }
-
-    /* Run the Sentinel timer if we are in sentinel mode. */
-    if (server.sentinel_mode) sentinelTimer();
-
-    /* Cleanup expired MIGRATE cached sockets. */
-    run_with_period(1000) {
-        migrateCloseTimedoutSockets();
-    }
-
-    /* Stop the I/O threads if we don't have enough pending work. */
-    stopThreadedIOIfNeeded();
-
-    /* Resize tracking keys table if needed. This is also done at every
-     * command execution, but we want to be sure that if the last command
-     * executed changes the value via CONFIG SET, the server will perform
-     * the operation even if completely idle. */
-    if (server.tracking_clients) trackingLimitUsedSlots();
-
-    /* Start a scheduled BGSAVE if the corresponding flag is set. This is
-     * useful when we are forced to postpone a BGSAVE because an AOF
-     * rewrite is in progress.
-     *
-     * Note: this code must be after the replicationCron() call above so
-     * make sure when refactoring this file to keep this order. This is useful
-     * because we want to give priority to RDB savings for replication. */
-    if (!hasActiveChildProcess() &&
-        server.rdb_bgsave_scheduled &&
-        (server.unixtime-server.lastbgsave_try > CONFIG_BGSAVE_RETRY_DELAY ||
-         server.lastbgsave_status == C_OK))
-    {
-        rdbSaveInfo rsi, *rsiptr;
-        rsiptr = rdbPopulateSaveInfo(&rsi);
-        if (rdbSaveBackground(server.rdb_filename,rsiptr) == C_OK)
-            server.rdb_bgsave_scheduled = 0;
-    }
-
-    /* Fire the cron loop modules event. */
-    RedisModuleCronLoopV1 ei = {REDISMODULE_CRON_LOOP_VERSION,server.hz};
-    moduleFireServerEvent(REDISMODULE_EVENT_CRON_LOOP,
-                          0,
-                          &ei);
-```
-
-
 
 # Redis高可用
 
@@ -818,6 +704,10 @@ def aeProcessEvents
 增量复制时，主从库之间具体是怎么保持同步的呢？这里的奥妙就在于 repl_backlog_buffer (默认大小为1MB)这个缓冲区。我们先来看下它是如何用于增量命令的同步的。当主从库断连后，主库会把断连期间收到的写操作命令，写入 replication buffer，同时也会把这些操作命令也写入 repl_backlog_buffer 这个缓冲区。repl_backlog_buffer 是一个环形缓冲区(**FIFO**)，主库会记录自己写到的位置，从库则会记录自己已经读到的位置。当从节点的内容已经不在环形缓冲区内了，则会触发BGSAVE
 
 ![redis主从增量复制](image\redis\redis主从增量复制.jpg)
+
+------
+
+
 
 ## **哨兵集群  Redis  Sentinel**
 
