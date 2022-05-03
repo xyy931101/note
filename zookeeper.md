@@ -126,7 +126,7 @@ ZXID展示了所有的ZooKeeper的变更顺序。每次变更会有一个唯一�
 
 其实通俗的理解就比较简单了，我是领导，我要向各位传达指令，不过传达之前我先问一下大家支不支持我，若有一半以上的人支持我，那我就向各位传达指令了
 
-![](D:\workspace\note\image\zookeeper\ZAB协议.jpeg)
+![](image\zookeeper\ZAB协议.jpeg)
 
 （1）leader首先把proposal发送到FIFO队列里
 
