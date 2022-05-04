@@ -43,13 +43,13 @@ Kafka 中消息是以 topic 进行分类的，生产者生产消息，消费者�
 
 index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下图为 index 文件和 log 文件的结构示意图。
 
-![image-20210306201647491](\image\kafka-index文件和log文件详解.png)
+![image-20210306201647491](image\kafka-index文件和log文件详解.png)
 
 “.index”文件存储大量的索引信息，“.log”文件存储大量的数据，索引文件中的元 数据指向对应数据文件中 message 的物理偏移地址。
 
 # Kafka 生产者 
 
-#### 生产者客户端整体架构
+### 生产者客户端整体架构
 
 ![](image\Kafka生产者客户端整体架构.png)
 
@@ -59,18 +59,36 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 ​	RecordAccumulator中为每个分区维护了一个双端队列，队列中的内容是ProducerBatch，即Deque<ProduderBatch>,创建消息写入到尾部，发送消息从头部读取。ProducerBatch是消息发送的一个批次，里面包含了一个或多个ProducerRecord。
 
-​		Sender从RecordAccumulator中获取到缓存的消息，会将<分区，Dequeue<ProducerBatch>>
+​		Sender从RecordAccumulator中获取到缓存的消息，会将消息进行分区，Deque<ProducerBatch>>
 转换为<Node,List<ProruderBatch>>,Node表示的是kafka集群的broker节点，生产者客户端与具体broker节点建立的连接。也就是向具体的broker节点发送消息而不关心具体分区。
 
 ​		转换为<Node,List<ProruderBatch>>后，sender还会进一步封装转换成<Node,Request>形式，将请求发送给各个Node。
 请求在发送给Kafka之前还会保存到InFlightRequests中，形式为： Map<NodeId,Dequeue<Request>>
 主要作用是缓存了已经发出去但是还未收到响应的请求。InFlightRequests通过配置参数max.flight.requests.per.connection可以限制每个链接最多缓存数量，默认值为5，即每个链接最多只能缓存5个未响应的请求，超过该参数之后就不能继续像这个连接发送请求。
 
-#### 分区策略 
+### 消息的发送
+
+发送消息主要有3种模式：发后即忘，同步，异步
+
+KafkaProducer中一般有两种异常：可重试的异常和不可重试的异常。对于可重试的异常会根据retries参数进行重试，retries默认为0
+
+```java
+NetworkException、LeaderNotAvailableException、UnknownTopicOrPartitionException、NotEnoughReplicasException、
+NotCoordinatorException
+```
+
+### 重要的生产者参数
+
+1. acks指定需要多少个副本收到这条消息之后生产者才会认为消息写入成功    `properties.put("acks", "-1");`
+2. max.request.size 限制生产者能发送消息的最大值，默认是1MB
+3. retries    retry.backoff.ms  重试次数与重试的间隔时间
+4. connections.max.idle.ms 指定多久之后关闭闲置的连接，默认是9分钟
+
+### 分区策略 
 
 ​	**所谓分区策略是决定生产者将消息发送到哪个分区的算法。**Kafka 为我们提供了默认的分区策略，同时它也支持你自定义分区策略
 
-##### **轮询策略**
+#### **轮询策略**
 
 ​		也称 Round-robin 策略，即顺序分配。比如一个主题下有 3 个分区，那么第一条消息被发送到分区 0，第二条被发送到分区 1，第三条被发送到分区 2，以此类推。当生产第 4 条消息时又会重新开始，即将其分配到分区 0，就像下面这张图展示的那样。
 
@@ -80,7 +98,7 @@ index 和 log 文件以当前 segment 的第一条消息的 offset 命名。下�
 
 ​		**轮询策略有非常优秀的负载均衡表现，它总是能保证消息最大限度地被平均分配到所有分区上，故默认情况下它是最合理的分区策略，也是我们最常用的分区策略之一。**
 
-##### **随机策略**
+#### **随机策略**
 
 也称 Randomness 策略。所谓随机就是我们随意地将消息放置到任意一个分区上，如下面这张图所示。
 
@@ -97,7 +115,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ​		本质上看随机策略也是力求将数据均匀地打散到各个分区，但从实际表现来看，它要逊于轮询策略，所以**如果追求数据的均匀分布，还是使用轮询策略比较好**。事实上，随机策略是老版本生产者使用的分区策略，在新版本中已经改为轮询了。
 
-##### **按消息键保序策略**
+#### **按消息键保序策略**
 
 ​		也称 Key-ordering 策略。有点尴尬的是，这个名词是我自己编的，Kafka 官网上并无这样的提法。
 
@@ -105,13 +123,15 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ![](image\kafka按消息键保序策略.png)
 
-#### 分区的原因 
+### 分区的原因 
 
 1. 方便在集群中扩展，每个 Partition 可以通过调整以适应它所在的机器，而一个 topic 又可以有多个 Partition 组成，因此整个集群就可以适应任意大小的数据了； 
 
 2. 可以提高并发，因为可以以 Partition 为单位读写了。
 
-   #### 分区的原则
+   
+
+   ### 分区的原则
 
    我们需要将 producer 发送的数据封装成一个 ProducerRecord 对象。
 
@@ -119,7 +139,7 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
    2. 没有指明 partition 值但有 key 的情况下，将 key 的 hash 值与 topic 的 partition 数进行取余得到 partition 值；
    3. 既没有 partition 值又没有 key 值的情况下，第一次调用时随机生成一个整数（后 面每次调用在这个整数上自增），将这个值与 topic 可用的 partition 总数取余得到 partition 值，也就是常说的 round-robin 算法。
 
-   #### 数据可靠性保证
+   ### 数据可靠性保证
 
    **为保证 producer 发送的数据，能可靠的发送到指定的 topic，topic 的每个 partition 收到 producer 发送的数据后，都需要向 producer 发送 ack（acknowledgement 确认收到），如果 producer 收到 ack，就会进行下一轮的发送，否则重新发送数据。**
 
@@ -139,7 +159,12 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 #### ISR 
 
-​		采用第二种方案之后，设想以下情景：leader 收到数据，所有 follower 都开始同步数据， 但有一个 follower，因为某种故障，迟迟不能与 leader 进行同步，那 leader 就要一直等下去， 直到它完成同步，才能发送 ack。这个问题怎么解决呢？ Leader 维护了一个动态的 in-sync replica set (ISR)，意为和 leader 保持同步的 follower 集 合。当 ISR 中的 follower 完成数据的同步之后，leader 就会给 follower 发送 ack。如果follower长时间未向leader同步 数据 ，则该follower将被踢出ISR ，该时间 阈 值 由**replica.lag.time.max.ms** 参数设定。Leader 发生故障之后，就会从 ISR 中选举新的 leader。
+​		采用第二种方案之后，设想以下情景：leader 收到数据，所有 follower 都开始同步数据， 但有一个 follower，因为某种故障，迟迟不能与 leader 进行同步，那 leader 就要一直等下去， 直到它完成同步，才能发送 ack。这个问题怎么解决呢？ Leader 维护了一个动态的 in-sync replica set (ISR)，意为和 leader 保持同步的 follower 集 合。当 ISR 中的 follower 完成数据的同步之后，leader 就会给 follower 发送 ack。如果follower长时间未向leader同步 数据 ，则该follower将被踢出ISR ，该时间 阈 值 由**replica.lag.time.max.ms** (默认是10000)参数设定。Leader 发生故障之后，就会从 ISR 中选举新的 leader。
+
+ISR集合发生变化的两个条件
+
+1. 上一次ISR集合发送变化超过5S
+2. 上一次写入zookeeper的时间距离超过60S
 
 #### ack 应答机制 
 
@@ -214,10 +239,11 @@ Broker 端在缓存中保存了这 Sequence Numbler，对于接收的每条消�
 4. followers 从 leader pull 消息，写入本地 log 后 leader 发送 ACK 
 5. leader 收到所有 ISR 中的 replica 的 ACK 后，增加 HW（high watermark，最后 commit 的 offset） 并向 producer 发送 ACK
 
-
 # Kafka 消费者
 
-#### 消费方式
+**每个分区只能被一个消费者组中的一个消费者消费到**
+
+### 消费方式
 
 ​		consumer 采用 **pull**（拉）模式从 broker 中读取数据。
 
@@ -225,7 +251,7 @@ Broker 端在缓存中保存了这 Sequence Numbler，对于接收的每条消�
 
 ​		**pull 模式不足之处是，如果 kafka 没有数据，消费者可能会陷入循环中**，一直返回空数 据。针对这一点，Kafka 的消费者在消费数据时会传入一个时长参数 **timeout**，如果当前没有 数据可供消费，consumer 会等待一段时间之后再返回，这段时长即为 **timeout**。
 
-#### 分区分配策略
+### 分区分配策略
 
 ​		一个 consumer group 中有多个 consumer，一个 topic 有多个 partition，所以必然会涉及 到 partition 的分配问题，即确定那个 partition 由哪个 consumer 来消费。在Kafka中会由coordinator进行协调进行管理
 
@@ -260,6 +286,11 @@ lastComsumedOffset: 当前消费到的位置
 position:下一次拉取消息的位置
 
 committedOffset:已经提交的消费位移
+
+### 必要的参数设置
+
+1. bootstrap.servers:kafa集群所需的brocker地址清单
+2. group.id：消费者组的ID，默认为""。如果设置为空，则会报错
 
 # KAFKA 客户端(broker)
 
@@ -297,6 +328,15 @@ committedOffset:已经提交的消费位移
 
   其中follower是通过自身循环线程，去向leader拉取消息的，在拉取的过程中，会把本follower的LEO带给leader，从而让leader更新HW。因为拉取是一直在的，这样处理可以减少响应的交互次数。其中如果leader中的LEO跟follwer的LEO相等的话,会有一个delay
 
+整个消息追加的过程可以概括为
+
+1. 生产者客户端发送消息至leader副本
+2. 消息被追加到leader副本的本地日志中，并且更新日志的偏移量
+3. follwer副本向leader请求副本同步数据，并且带上自己的HW
+4. leader副本所在服务器读取本地日志，并更新对应拉取follwer的副本信息
+5. leader副本将所在服务器将拉取结果返回follwer副本
+6. follwer副本收到返回结果，将消息追加到本地日志，并更新偏移量
+
 ## Kfaka的Segment的形成因素(LogSegment)
 
 1. segment文件创建时间是否大于配置的日志清除时间
@@ -314,6 +354,16 @@ committedOffset:已经提交的消费位移
 > ​	如果有一个broker加入集群中，那么控制器就会通过Broker ID去判断新加入的broker中是否含有现有分区的副本，如果有，就会从分区副本中去同步数据。
 >
 > ​		所谓控制器就是一个Borker，在一个kafka集群中，有多个broker节点，但是它们之间需要选举出一个leader，其他的broker充当follower角色。broker启动的时候会先去获取controller节点信息,如果不存在,会通过在zookeeper中创建临时节点/controller来让自己成为控制器，第一个创建成功的会成为controller。其他broker启动时也会在zookeeper中创建临时节点，但是发现节点已经存在，所以它们会收到一个异常，意识到控制器已经存在，那么就会在zookeeper中创建watch对象，便于它们收到控制器变更的通知。
+
+### Controller职责
+
+- 监听partition相关的变化。为Zookeeper中的/admin/reassign_partitions节点注册PartitionReassignmentListener，用来处理分区重分配的动作。为Zookeeper中的/isr_change_notification节点注册IsrChangeNotificetionListener，用来处理ISR集合变更的动作。为Zookeeper中的/admin/preferred-replica-election节点添加PreferredReplicaElectionListener，用来处理优先副本的选举动作。
+- 监听topic相关的变化。为Zookeeper中的/brokers/topics节点添加TopicChangeListener，用来处理topic增减的变化；为Zookeeper中的/admin/delete_topics节点添加TopicDeletionListener，用来处理删除topic的动作。
+- 监听broker相关的变化。为Zookeeper中的/brokers/ids/节点添加BrokerChangeListener，用来处理broker增减的变化。
+- 从Zookeeper中读取获取当前所有与topic、partition以及broker有关的信息并进行相应的管理。对于所有topic所对应的Zookeeper中的/brokers/topics/[topic]节点添加PartitionModificationsListener，用来监听topic中的分区分配变化。
+- 启动并管理分区状态机和副本状态机。
+- 更新集群的元数据信息。
+- 如果参数auto.leader.rebalance.enable设置为true，则还会开启一个名为“auto-leader-rebalance-task”的定时任务来负责维护分区的优先副本的均衡。
 
 ### 分区副本（partition）
 
