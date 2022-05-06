@@ -295,7 +295,7 @@ typedef struct redisObject {
 
   **redisObj  sdshdr两个结构都会申请内存**
 
-- **embstr**  字符串长度小于39
+- **embstr**  字符串长度小于44
 
   1. embstr创建时，内存分配次数从raw的两次降为一次
   
