@@ -9,7 +9,7 @@
 
 ## 工作经历
 
-**2019.02 - 至今&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;平安科技（深圳）有限公司&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;高级开发工程师**<br/>
+**2019.02 - 至今&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;平安科技（深圳）有限公司&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;高级开发工程师**<br/>
 
 4次A+，一次A的绩效
 
@@ -20,8 +20,6 @@
 5. 负责外部系统接入的联调与指导，及时有效的帮助用户与神兵数据相关功能；
 
 **2017.02- 2019.02&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;深圳市金证科技股份有限公司&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;JAVA开发工程师**<br/>
-
-外包到平安科技
 
 1. 负责后端接口编写，与前端联调，保质保量的完成产品的开发任务；
 2. 持续迭代与优化项目，保证代码和产品质量，优化性能，提升用户体验；
