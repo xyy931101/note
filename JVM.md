@@ -135,7 +135,9 @@ jmap	java内存印象工具
 目前主流方式主要有两种：
 
 - 划出一块内存作为句柄池，reference中存储这对象的访问句柄，而句柄中包含了对象的实例数据与类型数据。
-- 直接指针：refrence存储这直接对象地址，然后对象再存储着类型指针。
+- 直接指针：refrence存储这直接对象地址，然后对象再存储着类型指针。(也就是markwork保存着classpoint)
+
+![内存模型设计之–Class Pointer](image/jvm/内存模型设计之–Class Pointer.png)
 
 HotSpot主要使用第二种方式，因为JAVA访问对象非常频繁，可以减少一次类型指针的访问开销
 
@@ -255,6 +257,10 @@ HotSpot主要使用第二种方式，因为JAVA访问对象非常频繁，可以
 - 空间分配担保：
 
   - -XX:MaxTenuringThreshold
+  
+- 分配流程
+
+![新对象申请流程](image/jvm/新对象申请流程.png)
 
 ### 常见的垃圾回收器
 
