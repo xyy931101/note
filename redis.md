@@ -291,7 +291,7 @@ typedef struct redisObject {
 
 - **int** 当一个字符串是整数值得话，是以int类型保存的
 
-- **raw** SDS (Simple Dynamic String) 简单动态字符串  保存的是字符串值，且长度大于**39**
+- **raw** SDS (Simple Dynamic String) 简单动态字符串  保存的是字符串值，且长度大于**44**
 
   **redisObj  sdshdr两个结构都会申请内存**
 
