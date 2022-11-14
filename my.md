@@ -4,18 +4,18 @@
 ## 个人信息 
 
 * 性 别：男 &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;电子邮箱：18850198317@163.com
-* 年 龄：28&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;求职意向：深圳、广州
+* 年 龄：28&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;求职意向：杭州、深圳
 * 手 机：18850198317&emsp;&emsp;&emsp;&emsp;&emsp;现居住地：深圳(在职)
 
 ## 工作经历
 
 **2019.02 - 至今&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;平安科技（深圳）有限公司&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;高级开发工程师**<br/>
 
-4次A+，一次A的绩效
+5次A+，一次A的绩效
 
 1. 主要负责敏捷开发及应用生命周期管理相关的应用后端开发工作；
 2. 负责项目架构搭建，及相关系统机制的相关设计工作；
-3. 关注系统健康状况(内存及GC状况)，及时找到相关问题点、恢复系统正常运行，后续采取相应的措施增加系统的健壮性；
+3. 关注系统健康状况(内存,GC,慢请求等)，及时找到相关问题点、恢复系统正常运行，后续采取相应的措施增加系统的健壮性；
 4. 对外相关产品的本地化部署，系统对接，在线问题解决、答疑等；
 5. 负责外部系统接入的联调与指导，及时有效的帮助用户与神兵数据相关功能；
 
@@ -36,7 +36,7 @@
 
 1. **项目名称：神兵产品化开放平台&emsp;&emsp;&emsp;&emsp;项目时间：2018.12-至今** 
 
-   **SpringBoot+Dubbo+postgrepsql+Redis+Elasticsearch+Rabbitmq+Mybatis+Sentinel**
+   **SpringBoot+Dubbo+Postgrepsql+Redis+Elasticsearch+Rabbitmq+Mybatis+Sentinel+Skywalking**
 
    - 完成相应接口的开发，对各可能对外开发的功能采用钩子函数，对外实现拓展功能
    - 插件化平台开发机制，采用插拔式的设计理念，子插件在线热更新功能。插件可以通过平台提供的Api，完成相关功能的校验、特定动作后的回调、定制化接口的编写等一系列操作。插件化的开发模式有利于平台基础功能的稳定性、功能拓展、定制化需求的开发；
@@ -56,7 +56,7 @@
 
 3. **项目名称：神兵权限中心&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;项目时间：2018.02-至今** 
 
-   **Springboot+RabbitMq+Mybatis+PostgreSQL+Redis+Dubbo**
+   **Springboot+RabbitMq+Mybatis+PostgreSQL+Redis+Dubbo+Skywalking**
 
    - 完成对应需求的接口编写，保质保量的完成各子系统对于权限中心的功能依赖
    - 引入sentinel对系统进行限流，服务降级等相关功能，避免被其他子系统拖垮
@@ -85,5 +85,3 @@
 ## 教育经历
 
 * 集美大学&emsp;&emsp;&emsp;&emsp;&emsp;2011.9 ~ 2015.7&emsp;&emsp;&emsp;&emsp; 机械制造与自动化
-
-## 
