@@ -10,31 +10,6 @@
 
 ## 存储引擎层
 
-
-
-
-
-## 两阶段提交：主要解决回滚
-
-## **MVCC**![](image/mysql/两阶段提交.webp.webp)
-
-### 在两阶段提交的不同时刻，MySQL 异常重启会出现什么现象。
-
-如果在图中时刻 A 的地方，也就是写入 redo log 处于 prepare 阶段之后、写 binlog 之前，发生了崩溃（crash），由于此时 binlog 还没写，redo log 也还没提交，所以崩溃恢复的时候，这个事务会回滚。这时候，binlog 还没写，所以也不会传到备库。到这里，大家都可以理解。
-
-大家出现问题的地方，主要集中在时刻 B，也就是 binlog 写完，redo log 还没 commit 前发生 crash，那崩溃恢复的时候 MySQL 会怎么处理？
-
-#### 崩溃恢复时的判断规则
-
-1. 如果 redo log 里面的事务是完整的，也就是已经有了 commit 标识，则直接提交；
-
-2. 如果 redo log 里面的事务只有完整的 prepare，则判断对应的事务 binlog 是否存在并完整：
-
-   1. 如果是，则提交事务；
-   2. 否则，回滚事务。
-
-   
-
 # 索引
 
 ​	**索引的作用：提高数据查询效率**
@@ -279,275 +254,46 @@ T1 读取某个范围的数据，T2 在这个范围内插入新的数据，T1 �
 
 ## MVCC（Multiversion Concurrency Contro）
 
-MySQL在REPEATABLE READ隔离级别下，是可以很大程度避免幻读问题的发生的（**好像解决了，但是又没完全解决**），MySQL是怎么做到的？
-
-### 版本链
-
-**必须要知道的概念（每个版本链针对的一条数据）：**
-
-我们知道，对于使用InnoDB存储引擎的表来说，它的聚簇索引记录中都包含两个必要的隐藏列（row_id并不是必要的，我们创建的表中有主键或者非NULL的UNIQUE键时都不会包含row_id列）：
-trx_id：每次一个事务对某条聚簇索引记录进行改动时，都会把该事务的事务id赋值给trx_id隐藏列。
-roll_pointer：每次对某条聚簇索引记录进行改动时，都会把旧的版本写入到undo日志中，然后这个隐藏列就相当于一个指针，可以通过它来找到该记录修改前的信息。
-
-（补充点：undo日志：为了实现事务的原子性，InnoDB存储引擎在实际进行增、删、改一条记录时，都需要先把对应的undo日志记下来。**一般每对一条记录做一次改动，就对应着一条undo日志**，但在某些更新记录的操作中，也可能会对应着2条undo日志。一个事务在执行过程中可能新增、删除、更新若干条记录，也就是说需要记录很多条对应的undo日志，这些undo日志会被从0开始编号，也就是说根据生成的顺序分别被称为第0号undo日志、第1号undo日志、...、第n号undo日志等，这个编号也被称之为undo no。）
-
-为了说明这个问题，我们创建一个演示表
-
+```sql
+MVCC ： 多版本并发控制
+功能： 通过UNDO生成多版本的”快照“。非锁定读取。
+乐观锁： 乐观。
+悲观锁： 悲观。
+每个事务操作都要经历两个阶段：
+1. MVCC采用乐观锁机制，实现非锁定读取。
+2. 在RC级别下，事务中可以立即读取到其他事务commit过的readview
+3. 在RR级别下，事务中从第一次查询开始，生成一个一致性readview，直到事务结束。
+创建ReadView
+– 获取kernel_mutex
+• 遍历trx_sys的trx_list链表，获取所有活跃事务，创建ReadView
+– Read Committed
+• 语句开始，创建ReadView
+– Repeatable Read
+• 事务开始，创建ReadVie
 ```
-CREATE TABLE teacher (
-number INT,
-name VARCHAR(100),
-domain varchar(100),
-PRIMARY KEY (number)
-) Engine=InnoDB CHARSET=utf8;
-```
-
-然后向这个表里插入一条数据：
-
-```
-INSERT INTO teacher VALUES(1, '李瑾', 'JVM系列');
-```
-
-现在表里的数据就是这样的：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/2ab2e19d985e462e87c1b6e7c50ebc5a.png)
-
-假设插入该记录的事务id为60，那么此刻该条记录的示意图如下所示：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/c7b3d5e8c3bd4d91942b0891b0db0956.png)
-
-假设之后两个事务id分别为80、120的事务对这条记录进行UPDATE操作，操作流程如下：
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/85471f9eaddf4d42a51259b6878056ed.png)
-
-每次对记录进行改动，都会记录一条undo日志，每条undo日志也都有一个roll_pointer属性（INSERT操作对应的undo日志没有该属性，因为该记录并没有更早的版本），可以将这些undo日志都连起来，串成一个链表，所以现在的情况就像下图一样：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/c7dc3b48519b4961b04e03594ee80538.png)
-
-对该记录每次更新后，都会将旧值放到一条undo日志中，就算是该记录的一个旧版本，随着更新次数的增多，所有的版本都会被roll_pointer属性连接成一个链表，我们把这个链表称之为版本链，版本链的头节点就是当前记录最新的值。另外，每个版本中还包含生成该版本时对应的事务id。**于是可以利用这个记录的版本链来控制并发事务访问相同记录的行为，那么这种机制就被称之为多版本并发控制(Mulit-Version Concurrency Control MVCC)。**
-
-### ReadView
-
-**必须要知道的概念（作用于SQL查询语句）**
-
-对于使用READ UNCOMMITTED隔离级别的事务来说，由于可以读到未提交事务修改过的记录，所以直接读取记录的最新版本就好了（**所以就会出现脏读、不可重复读、幻读**）。
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/5e3918aac91a4ee8b6a2de3011021922.png)
-对于使用SERIALIZABLE隔离级别的事务来说，InnoDB使用加锁的方式来访问记录（**也就是所有的事务都是串行的，当然不会出现脏读、不可重复读、幻读**）。
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/82450615bb5b4612aaccdd7008280f5e.png)
-对于使用READ COMMITTED和REPEATABLE READ隔离级别的事务来说，都必须保证读到已经提交了的事务修改过的记录，也就是说假如另一个事务已经修改了记录但是尚未提交，是不能直接读取最新版本的记录的，核心问题就是：READ COMMITTED和REPEATABLE READ隔离级别在不可重复读和幻读上的区别是从哪里来的，其实结合前面的知识，这两种隔离级别关键**是需要判断一下版本链中的哪个版本是当前事务可见的**。
-**为此，InnoDB提出了一个ReadView的概念（作用于SQL查询语句），**
 
 这个ReadView中主要包含4个比较重要的内容：
-**m_ids：**表示在生成ReadView时当前系统中活跃的读写事务的事务id列表。
-**min_trx_id：**表示在生成ReadView时当前系统中活跃的读写事务中最小的事务id，也就是m_ids中的最小值。
-**max_trx_id：**表示生成ReadView时系统中应该分配给下一个事务的id值。注意max_trx_id并不是m_ids中的最大值，事务id是递增分配的。比方说现在有id为1，2，3这三个事务，之后id为3的事务提交了。那么一个新的读事务在生成ReadView时，m_ids就包括1和2，min_trx_id的值就是1，max_trx_id的值就是4。
-**creator_trx_id：**表示生成该ReadView的事务的事务id。
+
+1. ​	
+
+- **m_ids：**表示在生成ReadView时当前系统中活跃的读写事务的事务id列表。
+- **min_trx_id：**表示在生成ReadView时当前系统中活跃的读写事务中最小的事务id，也就是m_ids中的最小值。
+- **max_trx_id：**表示生成ReadView时系统中应该分配给下一个事务的id值。注意max_trx_id并不是m_ids中的最大值，事务id是递增分配的。比方说现在有id为1，2，3这三个事务，之后id为3的事务提交了。那么一个新的读事务在生成ReadView时，m_ids就包括1和2，min_trx_id的值就是1，max_trx_id的值就是4。
+- **creator_trx_id：**表示生成该ReadView的事务的事务id。
 
 ### READ COMMITTED
 
 #### 脏读问题的解决
 
-READ COMMITTED隔离级别的事务在每次查询开始时都会生成一个独立的ReadView。
-
-在MySQL中，READ COMMITTED和REPEATABLE READ隔离级别的的一个非常大的区别就是它们生成ReadView的时机不同。
-我们还是以表teacher 为例，假设现在表teacher 中只有一条由事务id为60的事务插入的一条记录，接下来看一下READ COMMITTED和REPEATABLE READ所谓的生成ReadView的时机不同到底不同在哪里。
-READ COMMITTED —— 每次读取数据前都生成一个ReadView
-比方说现在系统里有两个事务id分别为80、120的事务在执行：Transaction 80
-
-```
-UPDATE teacher  SET name = '马' WHERE number = 1;
-UPDATE teacher  SET name = '连' WHERE number = 1;
-...
-```
-
-此刻，表teacher 中number为1的记录得到的版本链表如下所示：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/bd1d16d019c9405ab12fca214e271053.png)
-
-假设现在有一个使用READ COMMITTED隔离级别的事务开始执行：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/ce38f77cc7814319b8b8b8e6bf1c7997.png)
-
-```
-使用READ COMMITTED隔离级别的事务
-
-BEGIN;
-SELECE1：Transaction 80、120未提交
-
-SELECT * FROM teacher WHERE number = 1; # 得到的列name的值为'李瑾'
-```
-
-第1次select的时间点 如下图：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1653285598056/2cb53fc2abf649ab88804b8bc4054127.png)
-
-这个SELECE1的执行过程如下：
-在执行SELECT语句时会先生成一个ReadView：
-
-ReadView的m_ids列表的内容就是[80, 120]，min_trx_id为80，max_trx_id为121，creator_trx_id为0。
-
-然后从版本链中挑选可见的记录，从图中可以看出，最新版本的列name的内容是'**连**'，该版本的trx_id值为80，在m_ids列表内，所以不符合可见性要求（trx_id属性值在ReadView的min_trx_id和max_trx_id之间说明创建ReadView时生成该版本的事务还是活跃的，该版本不可以被访问；如果不在，说明创建ReadView时生成该版本的事务已经被提交，该版本可以被访问），根据roll_pointer跳到下一个版本。
-下一个版本的列name的内容是'**马**'，该版本的trx_id值也为80，也在m_ids列表内，所以也不符合要求，继续跳到下一个版本。
-下一个版本的列name的内容是'**李瑾**'，该版本的trx_id值为60，小于ReadView中的min_trx_id值，所以这个版本是符合要求的，最后返回给用户的版本就是这条列name为'**李瑾**'的记录。
-
-**所以有了这种机制，就不会发生脏读问题！因为会去判断活跃版本，必须是不在活跃版本的才能用，不可能读到没有 commit的记录。**
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1653285598056/dd356cf81ec14665b7f11c82ec6021e9.png)
-
-#### 不可重复读问题
-
-然后，我们把事务id为80的事务提交一下，然后再到事务id为120的事务中更新一下表teacher 中number为1的记录：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/352c5da6030041ef820ba4408c670362.png)
-
-```
-Transaction120
-
-BEGIN;
-
-更新了一些别的表的记录
-
-UPDATE teacher  SET name = '严' WHERE number = 1;
-UPDATE teacher  SET name = '晁' WHERE number = 1;
-
-```
-
-此刻，表teacher 中number为1的记录的版本链就长这样：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/7202b4c9114b440f9473bcfe9699ab74.png)
-
-然后再到刚才使用READ COMMITTED隔离级别的事务中继续查找这个number为1的记录，如下：
-
-使用READ COMMITTED隔离级别的事务
-
-```
-BEGIN;
-
-SELECE1：Transaction 80、120均未提交
-
-SELECT * FROM teacher WHERE number = 1; # 得到的列name的值为'李瑾'
-
-SELECE2：Transaction 80提交，Transaction 120未提交
-
-SELECT * FROM teacher WHERE number = 1; # 得到的列name的值为'连'
-
-```
-
-**第2次select的时间点 如下图：**
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1653285598056/076acec8fbe7463cb9f2f709327cdfb5.png)
-
-这个SELECE2的执行过程如下：
-
-SELECT * FROM teacher WHERE number = 1;
-
-在执行SELECT语句时会又会单独生成一个ReadView，该ReadView信息如下：
-
-m_ids列表的内容就是[120]（事务id为80的那个事务已经提交了，所以再次生成快照时就没有它了），min_trx_id为120，max_trx_id为121，creator_trx_id为0。
-然后从版本链中挑选可见的记录，从图中可以看出，最新版本的列name的内容是'**晁**'，该版本的trx_id值为120，在m_ids列表内，所以不符合可见性要求，根据roll_pointer跳到下一个版本。
-下一个版本的列name的内容是'**严**'，该版本的trx_id值为120，也在m_ids列表内，所以也不符合要求，继续跳到下一个版本。
-下一个版本的列name的内容是'**连**'，该版本的trx_id值为80，小于ReadView中的min_trx_id值120，所以这个版本是符合要求的，最后返回给用户的版本就是这条列name为'**连**'的记录。
-
-以此类推，如果之后事务id为120的记录也提交了，再次在使用READ COMMITTED隔离级别的事务中查询表teacher 中number值为1的记录时，得到的结果就是'**晁**'了，具体流程我们就不分析了。
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1653285598056/e183bd95aed6411aba3ded451871dbff.png)
+READ COMMITTED隔离级别的事务在**每次**查询开始时都会生成一个独立的ReadView。
 
 
-#### 但会出现不可重复读问题。
-
-明显上面一个事务中两次
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1653285598056/b1232c1150a646eda0637a914716e0fc.png)
+#### 会出现不可重复读问题。
 
 
 ### REPEATABLE READ
 
-#### REPEATABLE READ解决不可重复读问题
-
-REPEATABLE READ —— 在第一次读取数据时生成一个ReadView
-
-对于使用REPEATABLE READ隔离级别的事务来说，只会在第一次执行查询语句时生成一个ReadView，之后的查询就不会重复生成了。我们还是用例子看一下是什么效果。
-
-比方说现在系统里有两个事务id分别为80、120的事务在执行：Transaction 80
-
-```
-UPDATE teacher  SET name = '马' WHERE number = 1;
-UPDATE teacher  SET name = '连' WHERE number = 1;
-...
-```
-
-此刻，表teacher 中number为1的记录得到的版本链表如下所示：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/bd1d16d019c9405ab12fca214e271053.png)
-
-假设现在有一个使用REPEATABLE READ隔离级别的事务开始执行：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/ce38f77cc7814319b8b8b8e6bf1c7997.png)
-
-```
-使用READ COMMITTED隔离级别的事务
-
-BEGIN;
-SELECE1：Transaction 80、120未提交
-
-SELECT * FROM teacher WHERE number = 1; # 得到的列name的值为'李瑾'
-```
-
-这个SELECE1的执行过程如下：
-在执行SELECT语句时会先生成一个ReadView：
-
-ReadView的m_ids列表的内容就是[80, 120]，min_trx_id为80，max_trx_id为121，creator_trx_id为0。
-
-然后从版本链中挑选可见的记录，从图中可以看出，最新版本的列name的内容是'**连**'，该版本的trx_id值为80，在m_ids列表内，所以不符合可见性要求（trx_id属性值在ReadView的min_trx_id和max_trx_id之间说明创建ReadView时生成该版本的事务还是活跃的，该版本不可以被访问；如果不在，说明创建ReadView时生成该版本的事务已经被提交，该版本可以被访问），根据roll_pointer跳到下一个版本。
-下一个版本的列name的内容是'**马**'，该版本的trx_id值也为80，也在m_ids列表内，所以也不符合要求，继续跳到下一个版本。
-下一个版本的列name的内容是'**李瑾**'，该版本的trx_id值为60，小于ReadView中的min_trx_id值，所以这个版本是符合要求的，最后返回给用户的版本就是这条列name为'**李瑾**'的记录。
-之后，我们把事务id为80的事务提交一下，然后再到事务id为120的事务中更新一下表teacher 中number为1的记录：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/352c5da6030041ef820ba4408c670362.png)
-
-```
-Transaction120
-
-BEGIN;
-
-更新了一些别的表的记录
-
-UPDATE teacher  SET name = '严' WHERE number = 1;
-UPDATE teacher  SET name = '晁' WHERE number = 1;
-
-```
-
-此刻，表teacher 中number为1的记录的版本链就长这样：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/7202b4c9114b440f9473bcfe9699ab74.png)
-
-然后再到刚才使用REPEATABLE READ隔离级别的事务中继续查找这个number为1的记录，如下：
-
-使用READ COMMITTED隔离级别的事务
-
-```
-BEGIN;
-
-SELECE1：Transaction 80、120均未提交
-
-SELECT * FROM teacher WHERE number = 1; # 得到的列name的值为'李瑾'
-
-SELECE2：Transaction 80提交，Transaction 120未提交
-
-SELECT * FROM teacher WHERE number = 1; # 得到的列name的值为'李瑾'
-
-```
-
-这个SELECE2的执行过程如下：
-
-因为当前事务的隔离级别为REPEATABLE READ，而之前在执行SELECE1时已经生成过ReadView了，所以此时直接复用之前的ReadView，之前的ReadView的m_ids列表的内容就是[80, 120]，min_trx_id为80，max_trx_id为121，creator_trx_id为0。
-
-**根据前面的分析，返回的值还是'李瑾'。**
-
-**也就是说两次SELECT查询得到的结果是重复的，记录的列name值都是'李瑾'，这就是可重复读的含义。**
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/64659425cf56414fba3a80c42c0538b7.png)
+解决不可重复读问题
 
 **总结一下就是：**
 
@@ -557,60 +303,11 @@ SELECT * FROM teacher WHERE number = 1; # 得到的列name的值为'李瑾'
 
 2、如果被访问版本的trx_id属性值小于ReadView中的min_trx_id值，表明生成该版本的事务在当前事务生成ReadView前已经提交，所以该版本可以被当前事务访问。
 
-### MVCC下的幻读解决和幻读现象
-
-前面我们已经知道了，REPEATABLE READ隔离级别下MVCC可以解决不可重复读问题，那么幻读呢？MVCC是怎么解决的？幻读是一个事务按照某个相同条件多次读取记录时，后读取时读到了之前没有读到的记录，而这个记录来自另一个事务添加的新记录。
-我们可以想想，在REPEATABLE READ隔离级别下的事务T1先根据某个搜索条件读取到多条记录，然后事务T2插入一条符合相应搜索条件的记录并提交，然后事务T1再根据相同搜索条件执行查询。结果会是什么？按照**ReadView中的比较规则(后两条)：**
-3、如果被访问版本的trx_id属性值大于或等于ReadView中的max_trx_id值，表明生成该版本的事务在当前事务生成ReadView后才开启，所以该版本不可以被当前事务访问。
-4、如果被访问版本的trx_id属性值在ReadView的min_trx_id和max_trx_id之间(min_trx_id &#x3c; trx_id &#x3c; max_trx_id)，那就需要判断一下trx_id属性值是不是在m_ids列表中，如果在，说明创建ReadView时生成该版本的事务还是活跃的，该版本不可以被访问；如果不在，说明创建ReadView时生成该版本的事务已经被提交，该版本可以被访问。
-
-不管事务T2比事务T1是否先开启，事务T1都是看不到T2的提交的。请自行按照上面介绍的版本链、ReadView以及判断可见性的规则来分析一下。
-但是，在REPEATABLE READ隔离级别下InnoDB中的MVCC 可以很大程度地避免幻读现象，而不是完全禁止幻读。怎么回事呢？我们来看下面的情况：
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/00b3c1b4774c47cb9a2ceb19d921b504.png)
-
-我们首先在事务T1中：
-
-```
-select * from teacher where number = 30;
-```
-
-很明显，这个时候是找不到number = 30的记录的。
-我们在事务T2中，执行：
-
-```
-insert into teacher values(30,'豹','数据湖');
-```
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/f1935b415db04ac482e023c6406f8de3.png)
-
-通过执行insert into teacher values(30,'豹','数据湖');，我们往表中插入了一条number = 30的记录。
-此时回到事务T1，执行：
-
-```
-update teacher set domain='RocketMQ' where number=30;
-select * from teacher where number = 30;
-```
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1651212459071/7ca9e16a31d84d5ca72fdb236a95eb28.png)
-
-嗯，怎么回事？事务T1很明显出现了幻读现象。
-在REPEATABLE READ隔离级别下，T1第一次执行普通的SELECT 语句时生成了一个ReadView（但是版本链没有），之后T2向teacher 表中新插入一条记录并提交，然后T1也进行了一个update语句。
-ReadView并不能阻止T1执行UPDATE 或者DELETE 语句来改动这个新插入的记录，但是这样一来，这条新记录的trx_id隐藏列的值就变成了T1的事务id。
-
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1653285598056/92d29ec669db40b1a07fb0b3cc8cb730.png)
-
-之后T1再使用普通的SELECT 语句去查询这条记录时就可以看到这条记录了，也就可以把这条记录返回给客户端。因为这个特殊现象的存在，我们也可以认为MVCC 并不能完全禁止幻读（**就是第一次读如果是空的情况，且在自己事务中进行了该条数据的修改**）。
-
 ### MVCC小结
 
 从上边的描述中我们可以看出来，所谓的MVCC（Multi-Version Concurrency Control ，多版本并发控制）指的就是在使用READ COMMITTD、REPEATABLE READ这两种隔离级别的事务在执行普通的SELECT操作时访问记录的版本链的过程，这样子可以使不同事务的读-写、写-读操作并发执行，从而提升系统性能。
 
-READ COMMITTD、REPEATABLE READ这两个隔离级别的一个很大不同就是：**生成ReadView的时机不同**，READ COMMITTD**在每一次进行普通SELECT操作前都会生成一个ReadView**，而REPEATABLE READ只在**第一次进行普通SELECT操作前生成一个ReadView**，之后的查询操作都重复使用这个ReadView就好了，从而基本上可以避免幻读现象（**就是第一次读如果ReadView是空的情况中的某些情况则避免不了**）。
-
-另外，所谓的MVCC只是在我们进行普通的SEELCT查询时才生效，截止到目前我们所见的所有SELECT语句都算是普通的查询，至于什么是个不普通的查询，后面马上就会讲到（锁定读）。
-
-
+READ COMMITTD、REPEATABLE READ这两个隔离级别的一个很大不同就是：**生成ReadView的时机不同**，READ COMMITTD**在每一次进行普通SELECT操作前都会生成一个ReadView**，而REPEATABLE READ只在**第一次进行普通SELECT操作前生成一个ReadView**，之后的查询操作都重复使用这个ReadView就好了，从而基本上可以避免幻读现象（**就是第一次读如果ReadView是空的情况中的某些情况则避免不了**）
 
 # 数据库表的空间回收
 
@@ -644,51 +341,186 @@ READ COMMITTD、REPEATABLE READ这两个隔离级别的一个很大不同就是�
 
 `mysql> select * from t sys.innodb_lock_waits where locked_table='`test`.`t`'\G`
 
+# InnoDB 存储引擎核心特性介绍
 
+```
+MVCC ： 多版本并发控制
+聚簇索引 ： 用来组织存储数据和优化查询
+支持事务 ： 数据最终一致提供保证
+支持行级锁 ： 并发控制
+外键 ： 多表之间的数据一致一致性
+多缓冲区支持
+9.4 存储引擎管理
+9.4.1 查询支持的存储引擎
+9.4.2 查看某张表的存储引擎
+9.4.2 创建表设定存储引擎
+9.4.2 修改已有表的存储引擎
+自适应Hash索引： AHI
+复制中支持高级特性。
+备份恢复： 支持热备。
+自动故障恢复：CR Crash Recovery
+双写机制 ： DWB Double Write Buffer
+```
 
-# binlog 与redo log的写入机制
+## InnoDB体系结构---线程和内存结构详解
 
-## binlog 的写入机制
+###  线程结构
 
-其实，binlog 的写入逻辑比较简单：
+### Master Thread
 
-​	事务执行过程中，先把日志写到 binlog cache，事务提交的时候，再把 binlog cache 写到 binlog 文件中。一个事务的 binlog 是不能被拆开的，因此不论这个事务多大，也要确保一次性写入。这就涉及到了 binlog cache 的保存问题。系统给 binlog cache 分配了一片内存，每个线程一个，参数 binlog_cache_size 用于控制单个线程内 binlog cache 所占内存的大小。如果超过了这个参数规定的大小，就要暂存到磁盘。事务提交的时候，执行器把 binlog cache 里的完整事务写入到 binlog 中，并清空 binlog cache。如下图所示：
+```sql
+a. 控制刷新脏页到磁盘（CKPT）
+b. 控制日志缓冲刷新到磁盘（log buffer ---> redo）
+c. undo页回收
+d. 合并插入缓冲(change buffer)
+e. 控制IO刷新数量
+说明：
+参数innodb_io_capacity表示每秒刷新脏页的数量，默认为200。
+innodb_max_dirty_pages_pct设置出发刷盘的脏页百分比，即当脏页占到缓冲区数据达到这个百分比时，就会刷新innodb_io_capacity个脏页到磁盘。
+参数innodb_adaptive_flushing = ON（自适应地刷新），该值影响每秒刷新脏页的数量。原来的刷新规则是：脏页在缓冲池所占的比例小于innodb_max_dirty_pages_pct时，不刷新脏页；大于innodb_max_dirty_pages_pct时，刷新100个脏页。
+随着innodb_adaptive_flushing参数的引入，InnoDB存储引擎会通过一个名为buf_flush_get_desired_flush_rate的函数来判断需要刷新脏页最合适的数量。粗略地翻阅源代码后发现buf_flush_get_desired_flush_rate通过判断产生重做日志（redo log）的速度来决定最合适的刷新脏页数量。因此，当脏页的比例小于innodb_max_dirty_pages_pct时，也会刷新一定量的脏页。
+```
 
-![](image/mysql/binlog写入.webp)
+### IO Thread
 
-可以看到，每个线程有自己 binlog cache，但是共用同一份 binlog 文件。
+```
+在InnoDB存储引擎中大量使用Async IO来处理写IO请求,IO Thread的工作主要是负责这些IO请求的回调处理。
+写线程和读线程分别由innodb_write_threads和innodb_read_threads参数控制，默认都为4。
+```
 
-- 图中的 write，指的就是指把日志写入到文件系统的 page cache，并没有把数据持久化到磁盘，所以速度比较快。
-- 图中的 fsync，才是将数据持久化到磁盘的操作。一般情况下，我们认为 fsync 才占磁盘的 IOPS。
+### Purge Thread
 
-write 和 fsync 的时机，是由参数 sync_binlog 控制的：
+```
+事务在提交之前，通过undolog(回滚日志)记录事务开始之前的状态，当事务被提交后，undolog便不再需要，因此需要Purge Thread线程来回收已经使用并分配的undo页。可以在配置文件中添加innodb_purge_threads=1来开启独立的Purge Thread，等号后边控制该线程数量，默认为4个。
+```
 
-1. sync_binlog=0 的时候，表示每次提交事务都只 write，不 fsync；
-2. sync_binlog=1 的时候，表示每次提交事务都会执行 fsync；
-3. sync_binlog=N(N>1) 的时候，表示每次提交事务都 write，但累积 N 个事务后才 fsync。
+Page Cleaner Thread
 
-## redo log 的写入机制
+```
+InnoDB 1.2.X版本以上引入，脏页刷新，减轻master的工作，提高性能。
+```
 
+# Mysql的日志
 
+## REDO日志
 
-![](image/mysql/MySQL redo log 存储状态.webp)
+### redo log **设计目标**
 
-这三种状态分别是：
+redo log 是属于引擎层(innodb)的日志，它的设计目标是支持innodb的“事务”的特性，事务ACID特性分别是原子性、一致性、隔离性、持久性， 一致性是事务的最终追求的目标，隔离性、原子性、持久性是达成一致性目标的手段，根据的文章我们已经知道隔离性是通过锁机制来实现的。 而事务的原子性和持久性则是通过redo log 和undo log来保障的。
 
-1. 存在 redo log buffer 中，物理上是在 MySQL 进程内存中，就是图中的红色部分；
-2. 写到磁盘 (write)，但是没有持久化（fsync)，物理上是在文件系统的 page cache 里面，也就是图中的黄色部分；
-3. 持久化到磁盘，对应的是 hard disk，也就是图中的绿色部分。
+redo log 能保证对于已经COMMIT的事务产生的数据变更，即使是系统宕机崩溃也可以通过它来进行数据重做，达到数据的一致性，这也就是事务持久性的特征，一旦事务成功提交后，只要修改的数据都会进行持久化，不会因为异常、宕机而造成数据错误或丢失,所以解决异常、宕机而可能造成数据错误或丢是redo log的核心职责。
 
-为了控制 redo log 的写入策略，InnoDB 提供了 innodb_flush_log_at_trx_commit 参数，它有三种可能取值：
+### **redo log记录的内容**
 
-1. 设置为 0 的时候，表示每次事务提交时都只是把 redo log 留在 redo log buffer 中 ;
-2. 设置为 1 的时候，表示每次事务提交时都将 redo log 直接持久化到磁盘；
-3. 设置为 2 的时候，表示每次事务提交时都只是把 redo log 写到 page cache。
+redo log记录的是操作数据变更的日志，听起来好像和binlog有类似的地方，有时候我都会想有了binlog为什么还要redo log，当然从其它地方可以找到很多的理由，但是我认为最核心的一点就是redo log记录的数据变更粒度和binlog的数据变更粒度是不一样的，也正因为这个binlog是没有进行崩溃恢复事务数据的能力的。
 
-除了后台线程每秒一次的轮询操作外，还有两种场景会让一个没有提交的事务的 redo log 写入到磁盘中。
+以修改数据为例，binlog 是以表为记录主体，在ROW模式下，binlog保存的表的每行变更记录。
 
-- 一种是，redo log buffer 占用的空间即将达到 innodb_log_buffer_size 一半的时候，后台线程会主动写盘。注意，由于这个事务并没有提交，所以这个写盘动作只是 write，而没有调用 fsync，也就是只留在了文件系统的 page cache。
-- 另一种是，并行的事务提交的时候，顺带将这个事务的 redo log buffer 持久化到磁盘。假设一个事务 A 执行到一半，已经写了一些 redo log 到 buffer 中，这时候有另外一个线程的事务 B 提交，如果 innodb_flush_log_at_trx_commit 设置的是 1，那么按照这个参数的逻辑，事务 B 要把 redo log buffer 里的日志全部持久化到磁盘。这时候，就会带上事务 A 在 redo log buffer 里的日志一起持久化到磁盘。
+比如update tb_user set age =18 where name ='赵白' ，如果这条语句修改了三条记录的话，那么binlog记录就是
+
+```text
+ UPDATE `db_test`.`tb_user` WHERE @1=5 @2='赵白' @3=91 @4='1543571201' SET  @1=5 @2='赵白' @3=18 @4='1543571201'
+ UPDATE `db_test`.`tb_user` WHERE @1=6 @2='赵白' @3=91 @4='1543571201' SET  @1=5 @2='赵白' @3=18 @4='1543571201'
+ UPDATE `db_test`.`tb_user` WHERE @1=7 @2='赵白' @3=91 @4='1543571201' SET  @1=5 @2='赵白' @3=18 @4='1543571201'
+```
+
+redo log则是记录着磁盘数据的变更日志，以磁盘的最小单位“页”来进行记录。上面的修改语句，在redo log里面记录得可能就是下面的形式。
+
+```text
+ 把表空间10、页号5、偏移量为10处的值更新为18。
+ 把表空间11、页号1、偏移量为2处的值更新为18。
+ 把表空间12、页号2、偏移量为9处的值更新为18。
+```
+
+当我们把数据从内存保存到磁盘的过程中，Mysql是以页为单位进行刷盘的，这里的页并不是磁盘的页，而是Mysql自己的单位，Mysql里的一页数据单位为16K，所以在刷盘的过程中需要把数据刷新到磁盘的多个扇区中去。 而把16K数据刷到磁盘的每个扇区里这个过程是无法保证原子性的，也就意味着Mysql把数据从内存刷到磁盘的过程中，如果数据库宕机，那么就可能会造成一步分数据成功，一部分数据失败的结果。而这个时候通过binlog这种级别的日志是无法恢复的，一个update可能更改了多个磁盘区域的数据，如果根据SQL语句回滚，那么势必会让那些已经刷盘成功的数据造成数据不一致。所以这个时候还是得需要通过redo log这种记录到磁盘数据级别的日志进行数据恢复。
+
+### **redo log写入策略**
+
+redo lo占用的空间是一定的，并不会无线增大（可以通过参数设置），写入的时候是进顺序写的，所以写入的性能比较高。当redo log空间满了之后又会从头开始以循环的方式进行覆盖式的写入。
+
+在写入redo log的时候也有一个redo log buffer，日志什么时候会刷到磁盘是通过innodb_flush_log_at_trx_commit 参数决定。
+
+innodb_flush_log_at_trx_commit=0 ，表示每次事务提交时都只是把 redo log 留在 redo log buffer 中 ;
+
+innodb_flush_log_at_trx_commit=1，表示每次事务提交时都将 redo log 直接持久化到磁盘；
+
+innodb_flush_log_at_trx_commit=2，表示每次事务提交时都只是把 redo log 写到 page cache。
+
+除了上面几种机制外，还有其它两种情况会把redo log buffer中的日志刷到磁盘。
+
+1、定时处理：有线程会定时(每隔 1 秒)把redo log buffer中的数据刷盘。
+
+2、根据空间处理：redo log buffer 占用到了一定程度( innodb_log_buffer_size 设置的值一半)占，这个时候也会把redo log buffer中的数据刷盘。
+
+## UNDO日志
+
+### **undo log设计目标**
+
+redo log 是也属于引擎层(innodb)的日志，从上面的redo log介绍中我们就已经知道了，redo log 和undo log的核心是为了保证innodb事务机制中的持久性和原子性，事务提交成功由redo log保证数据持久性，而事务可以进行回滚从而保证事务操作原子性则是通过undo log 来保证的。
+
+要对事务数据回滚到历史的数据状态，所以我们也能猜到undo log是保存的是数据的历史版本，通过历史版本让数据在任何时候都可以回滚到某一个事务开始之前的状态。undo log除了进行事务回滚的日志外还有一个作用，就是为数据库提供[MVCC](https://zhuanlan.zhihu.com/p/52977862)多版本数据读的功能。
+
+### **undo log记录内容**
+
+在Mysql里数据每次修改前，都首先会把修改之前的数据作为历史保存一份到undo log里面的，数据里面会记录操作该数据的事务ID，然后我们可以通过事务ID来对数据进行回滚。
+
+比如我们执行 update user_info set name =“李四”where id=1的时候。整个undo log的记录形式会如下。
+
+## binlog
+
+### binlog **记录内容**
+
+binlog应该说是Mysql里最核心的日志， 它记录了除了查询语句(select、show)之外的所有的 `DDL` 和 `DML` 语句,也就意味着我们基本上所有对数据库的操作变更都会记录到binlog里面。binlog以事件形式记录，不仅记录了操作的语句，同时还记录了语句所执行的消耗的时间。 binlog 有三种记录格式，分别是ROW、STATEMENT、MIXED。
+
+**1、ROW：** 基于变更的数据行进行记录，如果一个update语句修改一百行数据，那么这种模式下就会记录100行对应的记录日志。
+
+**2、STATEMENT：**基于SQL语句级别的记录日志，相对于ROW模式，STATEMENT模式下只会记录这个update 的语句。所以此模式下会非常节省日志空间，也避免着大量的IO操作。
+
+**3、MIXED：** 混合模式，此模式是ROW模式和STATEMENT模式的混合体，一般的语句修改使用statment格式保存binlog，如一些函数，statement无法完成主从复制的操作，则采用row格式保存binlog。
+
+### binlog 的写入机制
+
+在进行事务的过程中，首先会把binlog 写入到binlog cache中（因为写入到cache中会比较快，一个事务通常会有多个操作，避免每个操作都直接写磁盘导致性能降低），事务最终提交的时候再吧binlog 写入到磁盘中。当然事务在最终commit的时候binlog是否马上写入到磁盘中是由参数 sync_binlog 配置来决定的。
+
+**1、sync_binlog=0** 的时候，表示每次提交事务binlog不会马上写入到磁盘，而是先写到page cache,相对于磁盘写入来说写page cache要快得多,不过在Mysql 崩溃的时候会有丢失日志的风险。
+
+**2、sync_binlog=1** 的时候，表示每次提交事务都会执行 fsync 写入到磁盘 ；
+
+**3、sync_binlog的值大于1** 的时候，表示每次提交事务都 先写到page cach，只有等到积累了N个事务之后才fsync 写入到磁盘，同样在此设置下Mysql 崩溃的时候会有丢失N个事务日志的风险。
+
+很显然三种模式下，sync_binlog=1 是强一致的选择，选择0或者N的情况下在极端情况下就会有丢失日志的风险，具体选择什么模式还是得看系统对于一致性的要求。
+
+## redo、undo、binlog的生成流程与崩溃恢复
+
+当我们执行update user_info set name =“李四”where id=1 的时候大致流程如下：
+
+**1、从磁盘读取到id=1的记录，放到内存。**
+
+**2、记录undo log 日志。**
+
+**3、记录redo log (预提交状态)**
+
+**4、修改内存中的记录。**
+
+**5、记录binlog**
+
+**6、提交事务，写入redo log (commit状态)**
+
+![img](image\mysql\mysql写入流程.webp)
+
+我们根据上面的流程来看，如果在上面的某一个阶段数据库崩溃，如何恢复数据。
+
+**1、在第一步、第二步、第三步执行时据库崩溃：**因为这个时候数据还没有发生任何变化，所以没有任何影响，不需要做任何操作。
+
+**2、在第四步修改内存中的记录时数据库崩溃**：因为此时事务没有commit，所以这里要进行数据回滚，所以这里会通过undo log进行数据回滚。
+
+**3、第五步写入binlog时数据库崩溃：**这里和第四步一样的逻辑，此时事务没有commit，所以这里要进行数据回滚，会通过undo log进行数据回滚。
+
+**4、执行第六步事务提交时数据库崩溃：**如果数据库在这个阶段崩溃，那其实事务还是没有提交成功，但是这里并不能像之前一样对数据进行回滚，因为在提交事务前,binlog可能成功写入磁盘了，所以这里要根据两种情况来做决定。
+
+如果binlog存在事务记录：那么就**"认为"**事务已经提交了，这里可以根据redo log对数据进行重做。其实你应该有疑问，其实这个阶段发生崩溃了，最终的事务是没提交成功的,这里应该对数据进行回滚。 这里主要的一个考虑是因为binlog已经成功写入了，而binlog写入后，那么依赖于binlog的其它扩展业务（比如：从库已经同步了日志进行数据的变更）数据就已经产生了，如果这里进行数据回滚，那么势必就会造成主从数据的不一致。
+
+另外一种情况就 是binlog不存在事务记录，那么这种情况事务还未提交成功，所以会对数据进行回滚。
 
 ## WAL
 
