@@ -587,15 +587,3 @@ null
 
 虚引用必须和引用队列 （ReferenceQueue）联合使用。当垃圾回收器准备回收一个对象时，如果发现它还有虚引用，就会在回收对象的内存之前，把这个虚引用加入到与之 关联的引用队列中
 
-## ThreaLocal
-
-Java中**每一个线程都有自己的专属本地变量**， JDK 中提供的`ThreadLocal`类，**`ThreadLocal`类主要解决的就是让每个线程绑定自己的值，可以将`ThreadLocal`类形象的比喻成存放数据的盒子，盒子中可以存储每个线程的私有数据。**
-
-1. ThreadLocal是Java中所提供的线程本地存储机制，可以利用该机制将数据存在某个线程内部，该线程可以在任意时刻、任意方法中获取缓存的数据
-2. ThreadLocal底层是通过ThreadLocalmap来实现的，每个Thread对象（注意不是ThreadLocal对象）中都存在一个ThreadLocalMap，Map的key为ThreadLocal对象，Map的value为需要缓存的值WeakReference的Entry。
-3. ThreadLocal经典的应用场景就是**Spring的Trancation**连接管理（一个线程持有一个链接，该连接对象可以在不同给的方法之间进行线程传递，线程之间不共享同一个连接）
-
-### 用它可能会带来什么问题
-
-如果在线程池中使用ThreadLocal会造成**内存泄漏**，因为当ThreadLocal对象使用完之后，应该要把设置的key，value，也就是Entry对象进行回收，但线程池中的线程不会回收，而线程对象是通过**强引用**指向ThreadLocalmap，ThreadLocalmap也是通过强引用指向Entry对象，线程不被回收，Entry对象也就不会被回收，从而出现内存泄漏，**解决办法是**：在使用了ThreadLocal对象之后，手动调用ThreadLocal的**remove**方法，手动清除Entry对象。
-
