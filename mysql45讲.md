@@ -270,18 +270,18 @@ MVCC ： 多版本并发控制
 1. MVCC采用乐观锁机制，实现非锁定读取。
 2. 在RC级别下，事务中可以立即读取到其他事务commit过的readview
 3. 在RR级别下，事务中从第一次查询开始，生成一个一致性readview，直到事务结束。
-创建ReadView
-– 获取kernel_mutex
-• 遍历trx_sys的trx_list链表，获取所有活跃事务，创建ReadView
-– Read Committed
-• 语句开始，创建ReadView
-– Repeatable Read
-• 事务开始，创建ReadVie
 ```
 
-这个ReadView中主要包含4个比较重要的内容：
+### 实现原理
 
-1. ​	
+mvcc的实现，基于**undolog**、**版本链**、**readview**。
+
+在mysql存储的数据中，除了我们显式定义的字段，mysql会隐含的帮我们定义几个字段。
+
+- trx_id:事务id，每进行一次事务操作，就会自增1。
+- roll_pointer:回滚指针，用于找到上一个版本的数据，结合undolog进行回滚。
+
+ReadView中主要包含4个比较重要的内容：	
 
 - **m_ids：**表示在生成ReadView时当前系统中活跃的读写事务的事务id列表。
 - **min_trx_id：**表示在生成ReadView时当前系统中活跃的读写事务中最小的事务id，也就是m_ids中的最小值。
