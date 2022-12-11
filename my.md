@@ -4,7 +4,7 @@
 ## 个人信息 
 
 * 性 别：男 &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;电子邮箱：18850198317@163.com
-* 年 龄：28&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;求职意向：杭州、深圳
+* 年 龄：28&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;求职意向：广州、深圳
 * 手 机：18850198317&emsp;&emsp;&emsp;&emsp;&emsp;现居住地：深圳(在职)
 
 ## 工作经历
