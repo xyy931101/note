@@ -166,7 +166,7 @@ mysql> desc select * from city where id=1000000000000000;
 
 ## B+树数据结构
 
-![](D:\workspace\note\image\mysql\B+树数据结构.png)
+![](image\mysql\B+树数据结构.png)
 
 MySQL中InnoDB页的大小默认是**16kB**。也可以自己进行设置。（计算机在存储数据的时候，最小存储单元是扇区，一个扇区的大小是 512 字节，而文件系统（例如 XFS/EXT4）最小单元是块，一个块的大小是 4KB。InnoDB 引擎存储数据的时候，是以页为单位的，每个数据页的大小默认是 16KB，即四个块。）
 
