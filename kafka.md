@@ -123,6 +123,10 @@ return ThreadLocalRandom.current().nextInt(partitions.size());
 
 ![](image\kafka按消息键保序策略.png)
 
+#### 黏性分区
+
+​		既没有 partition 值又没有 key 值的情况下， [kafka](https://so.csdn.net/so/search?q=kafka&spm=1001.2101.3001.7020)采用Sticky Partition(黏性分区器)，会随机选择一个分区，并尽可能一直使用该分区，待该分区的batch已满或者已完成，kafka再随机一个分区进行使用.(以前是一条条的轮询，现在是一批次的轮询)
+
 ### 分区的原因 
 
 1. 方便在集群中扩展，每个 Partition 可以通过调整以适应它所在的机器，而一个 topic 又可以有多个 Partition 组成，因此整个集群就可以适应任意大小的数据了； 

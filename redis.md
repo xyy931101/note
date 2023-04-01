@@ -1309,13 +1309,13 @@ bigkey的存在并不是完全致命的：
 
 redis-cli --bigkeys可以命令统计bigkey的分布。
 
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1667197328004/4a07e97ad6f044e2a3454da671e1e832.png)
+![image.png](image\redis\bigkey的发现.png)
 
 但是在生产环境中，开发和运维人员更希望自己可以定义bigkey的大小，而且更希望找到真正的bigkey都有哪些,这样才可以去定位、解决、优化问题。
 
 判断一个key是否为bigkey，只需要执行debug object key查看serializedlength属性即可，它表示 key对应的value序列化之后的字节数。
 
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/5983/1667197328004/31f5dc8498c942b1a7dc61920feee621.png)
+![image.png](image\redis\value的字节数.png)
 
 如果是要遍历多个，则尽量不要使用keys的命令，可以使用scan的命令来减少压力。
 
