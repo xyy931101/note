@@ -11,19 +11,19 @@
 
 ## 1.2 写流程
 
-ES中的数据写入均发生在Primary Shard，当数据在Primary写入完成之后会同步到相应的Replica Shard。下图演示了单条数据写入ES的流程：
+ES中的数据写入均发生在Primary Shard，当数据在Primary写入完成之后会同步到相应的Replica Shard。以下为数据写入的步骤：
 
-![image.png](https://fynotefile.oss-cn-zhangjiakou.aliyuncs.com/fynote/fyfile/28/1653549519089/301d1931cdff434f8f764dca2df81c4d.png)
+1. 请求到达协调节点，协调节点先验证操作，如果有错误就拒绝该操作。然后根据当前请求集群状态，请求路由到主分片节点
 
-以下为数据写入的步骤：
+2. 该操作在主分片上本地执行，如果未通过就拒绝操作。
 
-1. 客户端发起写入请求至node 4
-2. node 4通过文档 id 在路由表中的映射信息确定当前数据的位置为分片0，分片0的主分片位于node 5，并将数据转发至node 5。
-3. 数据在node 5写入，写入成功之后将数据的同步请求转发至其副本所在的node 4和node 6上面，等待所有副本数据写入成功之后node 5将结果报告node 4，并由node 4将结果返回给客户端，报告数据写入成功。
+3. 操作执行成功后，转发该操作到in-sync副本组的所有副分片。如果是多个副本，并行转发。
 
-在这个过程中，接收用户请求的节点是不固定的，上述例子中，node 4 发挥了协调节点和客户端节点的作用，将数据转发至对应节点和接收以及返回用户请求。
+4. 一旦所有的副分片成功执行操作并回复主分片，主分片会把请求执行成功的信息返回协调节点，协调节点返回给客户端。
 
-数据在由 node4 转发至 node5的时候，是通过以下公式来计算，指定的文档具体在那个分片的
+   
+
+   通过以下公式来计算，指定的文档具体在那个分片的
 
 ```
 shard_num = hash(_routing) % num_primary_shards
@@ -36,8 +36,6 @@ shard_num = hash(_routing) % num_primary_shards
 ES 5.x 之后，一致性策略由 `wait_for_active_shards` 参数控制：
 
 即确定客户端返回数据之前必须处于active 的分片分片数（包括主分片和副本），默认为 wait_for_active_shards = 1，即只需要主分片写入成功，设置为 `all`或任何正整数，最大值为索引中的分片总数 ( `number_of_replicas + 1` )。如果当前 active 状态的副本没有达到设定阈值，写操作必须等待并且重试，默认等待时间30秒，直到 active 状态的副本数量超过设定的阈值或者超时返回失败为止。
-
-。
 
 执行索引操作时，分配给执行索引操作的主分片可能不可用。造成这种情况的原因可能是主分片当前正在从网关恢复或正在进行重定位。默认情况下，索引操作将在主分片上等待最多 1 分钟，然后才会失败并返回错误。
 
@@ -568,7 +566,9 @@ cluster.routing.allocation.awareness.force.zone.values: zone1,zone2
 
 负责轻量级集群范围的操作，比如：
 
-- 创建或删除索引
+- [TOC]
+
+  创建或删除索引
 - 规划和执行分片策略
 - 发布、修改集群状态
 
@@ -884,3 +884,114 @@ DELETE /_search/scroll/_all
 - 每次只能向后搜索1页数据
 - 适用于C端业务
 
+# 倒排索引核心算法
+
+ElasticSearch是这样优化的，生成一张倒排表（Term），四个组成字段：
+
+- Term :单词
+- Term Index :数据（单词）索引
+- Term Dictionary：数据（单词）字典。数据字典记录单词term
+- Posting List：倒排列表。倒排列表记录了出现过某个单词的所有文档的文档列表及单词在该文档中出现的位置信息，每条记录称为一个倒排项(Posting)。根据倒排列表，即可获知哪些文档包含某个单词。
+
+将大文本字段数据组成一个字段去重，组成Term Dictionary，记录每个字段在文本中的位置，组成PostListing，最后以单词信息建立索引(Term Index)，如下图所示。
+
+![img](https://pic2.zhimg.com/80/v2-1ff7d4298db037f76bf80abf3fa6cf0d_1440w.webp)
+
+其数据结构如下：
+
+![img](https://pic3.zhimg.com/80/v2-317b7b60974c54c9bbbdae811138e97e_1440w.webp)
+
+经过此优化后，由字典索引作为索引，也就是Trie Trees树的节点信息。然后指向最底层的单词形成链表，链表内存储单词对应倒排项列表。倒排项记录了单词在文本中的位置，最后指向文本
+
+**注意：**
+
+1. **Trie Trees数据结构，简称字典树/单词查找树/键树。**
+2. **倒排索引底层的数据结构很多，Trie Trees只是倒排索引中词项索引的数据结构**
+
+**文件对应结构：**
+
+![img](https://pic3.zhimg.com/80/v2-4ffeea813f5b60c82cedcc6395b49ce2_1440w.webp)
+
+## 词项索引的检索原理（FST）
+
+上图大家可能没看懂，他是怎么通过索引找到的单词。这就涉及到一个算法——FST（Finite-State Transducer）算法。
+
+实际上他是通过单词前缀，找到了Term Index，在通过索引编号，确认路径找到了底层链表。
+
+FST中存储的是<单词前缀，以该前缀开头的所有Term的压缩块在磁盘中的位置>，即为前文提到的从 term index 查到对应的 term dictionary 的 block 位置之后，再去磁盘上找 term，大大减少了磁盘的 random access 次数。
+
+![img](https://pic4.zhimg.com/80/v2-ea57fd1b74a164a29fac8c147194449f_1440w.webp)
+
+打个比方：Term Dictionary 就是新华字典的正文部分包含了所有的词汇，Term Index 就是新华字典前面的索引页，用于表明词汇在哪一页。
+
+## 倒排表的压缩算法
+
+- FOR压缩算法（Frame Of Reference）
+- RBM算法（Roaring bitmaps）
+
+### FOR（Frame Of Reference）
+
+![img](image\elastic\FOR算法)
+
+解释：
+
+1. 假设PostingList 存储的指针位置集合为{73,300,302,332,343,372}
+2. 根据上面的演示算法，如果直接存储指针集合需要的内存为24Bytes，占用空间太多，位置在磁盘空间中的位置不确定，太过零碎化。所以还需要优化。
+3. 第一次优化：由原先的指针集合改为差值集合，73-0，300-73,302-300……，最后得到差值集合{73,227,2,30,11,29}，在磁盘中占用空间还是为24Bytes。
+4. 第二次优化：切分成blocks，数组分开，计算出合适占用最小空间数量的blocks。注意：计算blocks，这块决定了后面的最快压缩和最小压缩两种压缩方式。
+5. 上图切成两个blocks：[{73,227,2},{30,11,29}]。blocks-1，最大值为227，227<2^8,所以按照最大数227的8bit开辟空间，为3个8bit的空间来存储{73,227,2}。blocks-2，最大值为30，30<2^5,所以按照最大数30的5bit开辟空间，为3个8bit的空间来存储{30,11,29},为了后期计算压缩包大招，blocks前端加入4bit=1Byte空间存储blocks里面每个数值的占用的空间大小。
+6. 最后24bytes压缩为7bytes
+
+### RBM算法（Roaring bitmaps)
+
+![img](image\elastic\RBM算法)
+
+Roaring bitmaps
+
+解释：
+
+1. 假设PostingList 存储的指针位置集合为{1000,62101,131385,132052,191173,196658}
+2. 大家观察会发现数值比较大，而且数值比较散列，就是使用差值，意味差值相差也比较大。最最重要的是数值大于65535。不适合使用FOR算法。
+3. 将数值%65535，得到商值与膜值（余数），使用商值+膜值（余数）作为重构集合{(0,1000),(0,62101),(2,313),(2,980),(2,60101),(3,50)}
+4. 将新的集合拆分成blocks。假设商值为key，膜值为value，相同key的value构成一个block。
+5. 将block存储到容器中。目前有三种容器:
+
+```text
+ArrayContainer:存储位数低于16位的value，使用16bit的short数组存储，也就是2Bytes。
+BitmapContainer：底层为216bits的BitMap数据结构，容器大小固定为8KB。blocks里的元素数量大于4096更换容器为BitmapContainer
+RunContainer：Lucene5新增的特性，容器为8Bytes。底层为Run-Length Encoding算法
+```
+
+以上可以看到数量明显小于<4096，而且数值都小于<65535，使用ArrayContainer进行存储，最后压缩为12bytes
+
+#### 1、为什么要除以65535
+
+将0-32-bit [0, n) 内的数据劈成 高16位和低16位两部分数据。所以需要%2^16，也就是%65535
+
+#### 2、为什么使用两种数据结构来存储低16位的值：
+
+　　　　short数组：2bit * 4096 = 8KB
+
+　　　　BitMap：存储16位范围内数据 65536/8 = 8192b，
+
+　　所以低于 4096个数，short 数组更省空间。
+
+![img](https://pic4.zhimg.com/80/v2-3c06cc5e1cb885f1d234cea0d04add9b_1440w.webp)
+
+解释一下：（上图跟下图是一个图，只是轴的数据样式不一样）
+
+上图中的两个函数线。**蓝函数线**为**ArrayContainer**,**黄函数线**为**BitmapContainer**
+
+上图中的两个函数线。**红函数线**为**ArrayContainer**,**蓝函数线**为**BitmapContainer**
+
+bitmap存储空间恒定为8K，最大的基数可达到8*1024*8=65536个(bit)
+
+array的基数与存储空间成正比，即基数越大，占用空占越多
+
+通过以上两点我们取两者交相交的点为平衡点，即小于该点array更省空间，大于该点bitmap更省空间。
+
+ArrayContainer函数解释：每个元素给与2Bytes的空间进行存储，随着元素的个数的增多，空间占用逐渐增大
+
+y(占用空间)=x(docsNumbers) * 2bytes
+
+![img](https://pic1.zhimg.com/80/v2-39e2c4ca3e6586edc127346ad7a68d64_1440w.webp)
